@@ -1,0 +1,73 @@
+<header class="sticky top-0 z-50 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
+  <nav class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center gap-8">
+      <a href={~p"/"} class="flex items-center gap-2">
+        <svg class="h-8 w-8 text-cyan-600" viewBox="0 0 32 32" fill="currentColor">
+          <circle cx="16" cy="12" r="8" opacity="0.9"/>
+          <line x1="10" y1="20" x2="8" y2="28" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="16" y1="20" x2="16" y2="30" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="22" y1="20" x2="24" y2="28" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="text-xl font-semibold text-slate-900 dark:text-white">Cyanea</span>
+      </a>
+
+      <div class="hidden items-center gap-6 md:flex">
+        <a href={~p"/explore"} class="text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
+          Explore
+        </a>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-4">
+      <!-- Search -->
+      <button
+        type="button"
+        class="flex h-9 w-64 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 transition hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600"
+        phx-click={JS.dispatch("open-command-palette")}
+      >
+        <.icon name="hero-magnifying-glass" class="h-4 w-4" />
+        <span class="flex-1 text-left">Search...</span>
+        <kbd class="rounded bg-slate-200 px-1.5 py-0.5 text-xs font-medium dark:bg-slate-700">⌘K</kbd>
+      </button>
+
+      <%= if @current_user do %>
+        <a href={~p"/new"} class="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-cyan-700">
+          New
+        </a>
+        <div class="relative">
+          <button type="button" class="flex items-center gap-2 rounded-full">
+            <img
+              src={@current_user.avatar_url || "https://api.dicebear.com/7.x/initials/svg?seed=#{@current_user.username}"}
+              alt={@current_user.username}
+              class="h-8 w-8 rounded-full"
+            />
+          </button>
+        </div>
+      <% else %>
+        <a href={~p"/auth/login"} class="text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
+          Sign in
+        </a>
+        <a href={~p"/auth/register"} class="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-cyan-700">
+          Sign up
+        </a>
+      <% end %>
+    </div>
+  </nav>
+</header>
+
+<main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+  <.flash_group flash={@flash} />
+  <%= @inner_content %>
+</main>
+
+<footer class="mt-auto border-t border-slate-200 py-8 dark:border-slate-800">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between text-sm text-slate-500">
+      <p>&copy; <%= DateTime.utc_now().year %> Cyanea. Open source.</p>
+      <div class="flex items-center gap-6">
+        <a href="https://github.com/cyanea-io/cyanea" class="hover:text-slate-900 dark:hover:text-white">GitHub</a>
+        <a href="/docs" class="hover:text-slate-900 dark:hover:text-white">Docs</a>
+      </div>
+    </div>
+  </div>
+</footer>

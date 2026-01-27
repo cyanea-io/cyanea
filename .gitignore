@@ -1,0 +1,54 @@
+# Dependencies
+/deps/
+/_build/
+/node_modules/
+
+# Generated files
+/priv/static/assets/
+*.ez
+
+# Local configuration
+/config/*.secret.exs
+.fetch
+
+# Database files
+*.db
+*.db-*
+
+# Testing
+/cover/
+/doc/
+
+# Dialyzer
+/priv/plts/
+
+# Editors
+.elixir_ls/
+.vscode/
+*.swp
+*.swo
+*~
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Rust/Cargo
+/native/cyanea_native/target/
+**/*.rs.bk
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Uploads (local dev)
+/priv/uploads/
+
+# Temporary files
+/tmp/
+*.tmp
+
+# Crash dumps
+erl_crash.dump
