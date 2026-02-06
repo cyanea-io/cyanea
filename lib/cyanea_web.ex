@@ -29,7 +29,7 @@ defmodule CyaneaWeb do
         layouts: [html: CyaneaWeb.Layouts]
 
       import Plug.Conn
-      import CyaneaWeb.Gettext
+      use Gettext, backend: CyaneaWeb.Gettext
 
       unquote(verified_routes())
     end
@@ -67,7 +67,7 @@ defmodule CyaneaWeb do
     quote do
       import Phoenix.HTML
       import CyaneaWeb.CoreComponents
-      import CyaneaWeb.Gettext
+      use Gettext, backend: CyaneaWeb.Gettext
 
       alias Phoenix.LiveView.JS
 

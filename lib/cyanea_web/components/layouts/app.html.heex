@@ -22,7 +22,7 @@
       <!-- Search -->
       <button
         type="button"
-        class="flex h-9 w-64 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 transition hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600"
+        class="hidden h-9 w-64 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500 transition hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600 sm:flex"
         phx-click={JS.dispatch("open-command-palette")}
       >
         <.icon name="hero-magnifying-glass" class="h-4 w-4" />
@@ -34,14 +34,50 @@
         <a href={~p"/new"} class="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-cyan-700">
           New
         </a>
-        <div class="relative">
-          <button type="button" class="flex items-center gap-2 rounded-full">
+
+        <%!-- User dropdown --%>
+        <div class="relative" phx-click-away={JS.hide(to: "#user-dropdown")}>
+          <button
+            type="button"
+            phx-click={JS.toggle(to: "#user-dropdown")}
+            class="flex items-center gap-2 rounded-full"
+          >
             <img
               src={@current_user.avatar_url || "https://api.dicebear.com/7.x/initials/svg?seed=#{@current_user.username}"}
               alt={@current_user.username}
               class="h-8 w-8 rounded-full"
             />
           </button>
+
+          <div
+            id="user-dropdown"
+            class="absolute right-0 mt-2 hidden w-56 rounded-xl border border-slate-200 bg-white py-2 shadow-lg dark:border-slate-700 dark:bg-slate-800"
+          >
+            <div class="border-b border-slate-200 px-4 py-2 dark:border-slate-700">
+              <p class="text-sm font-medium text-slate-900 dark:text-white">
+                <%= @current_user.name || @current_user.username %>
+              </p>
+              <p class="text-xs text-slate-500">@<%= @current_user.username %></p>
+            </div>
+            <a href={~p"/#{@current_user.username}"} class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700">
+              <.icon name="hero-user" class="h-4 w-4" /> Your profile
+            </a>
+            <a href={~p"/dashboard"} class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700">
+              <.icon name="hero-squares-2x2" class="h-4 w-4" /> Dashboard
+            </a>
+            <a href={~p"/settings"} class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700">
+              <.icon name="hero-cog-6-tooth" class="h-4 w-4" /> Settings
+            </a>
+            <div class="border-t border-slate-200 dark:border-slate-700">
+              <.link
+                href={~p"/auth/logout"}
+                method="delete"
+                class="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                <.icon name="hero-arrow-right-on-rectangle" class="h-4 w-4" /> Sign out
+              </.link>
+            </div>
+          </div>
         </div>
       <% else %>
         <a href={~p"/auth/login"} class="text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">

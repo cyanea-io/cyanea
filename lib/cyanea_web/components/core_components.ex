@@ -5,7 +5,7 @@ defmodule CyaneaWeb.CoreComponents do
   use Phoenix.Component
 
   alias Phoenix.LiveView.JS
-  import CyaneaWeb.Gettext
+  use Gettext, backend: CyaneaWeb.Gettext
 
   @doc """
   Renders a modal.

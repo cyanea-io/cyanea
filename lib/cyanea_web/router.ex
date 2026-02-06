@@ -17,20 +17,48 @@ defmodule CyaneaWeb.Router do
     plug :accepts, ["json"]
   end
 
+  # Session controller routes (must be outside LiveView scopes)
+  scope "/auth", CyaneaWeb do
+    pipe_through :browser
+
+    post "/login", UserSessionController, :create
+    delete "/logout", UserSessionController, :delete
+  end
+
+  # Auth routes (redirect if already logged in)
+  scope "/auth", CyaneaWeb do
+    pipe_through [:browser, :redirect_if_user_is_authenticated]
+
+    live_session :redirect_if_user_is_authenticated,
+      on_mount: [{CyaneaWeb.UserAuth, :redirect_if_user_is_authenticated}] do
+      live "/login", AuthLive.Login, :new
+      live "/register", AuthLive.Register, :new
+    end
+  end
+
+  # Authenticated routes
+  scope "/", CyaneaWeb do
+    pipe_through [:browser, :require_authenticated_user]
+
+    live_session :require_authenticated_user,
+      on_mount: [{CyaneaWeb.UserAuth, :ensure_authenticated}] do
+      live "/new", RepositoryLive.New, :new
+      live "/settings", SettingsLive, :edit
+      live "/dashboard", DashboardLive, :index
+    end
+  end
+
   # Public routes
   scope "/", CyaneaWeb do
     pipe_through :browser
 
-    live "/", HomeLive, :index
-  end
-
-  # Authentication routes (to be implemented)
-  scope "/auth", CyaneaWeb do
-    pipe_through :browser
-
-    # Placeholder routes - will be implemented
-    live "/login", AuthLive.Login, :new
-    live "/register", AuthLive.Register, :new
+    live_session :public,
+      on_mount: [{CyaneaWeb.UserAuth, :mount_current_user}] do
+      live "/", HomeLive, :index
+      live "/explore", ExploreLive, :index
+      live "/:username", UserLive.Show, :show
+      live "/:username/:slug", RepositoryLive.Show, :show
+    end
   end
 
   # Development routes

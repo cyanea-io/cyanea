@@ -1,0 +1,163 @@
+[tools]
+erlang = "28.3.1"
+elixir = "1.19.5-otp-28"
+
+[env]
+MIX_ENV = "dev"
+
+# ── Services ─────────────────────────────────────────────────────
+# Docker Compose manages PostgreSQL, MinIO, and Meilisearch.
+# Tasks below orchestrate the full local dev workflow.
+
+[tasks.services]
+description = "Start Docker Compose services (Postgres, MinIO, Meilisearch)"
+run = "docker compose up -d"
+
+[tasks."services:stop"]
+description = "Stop Docker Compose services"
+run = "docker compose down"
+
+[tasks."services:clean"]
+description = "Stop services and remove volumes"
+run = "docker compose down -v"
+
+[tasks."services:wait"]
+description = "Wait for Postgres to be ready"
+run = """
+echo "Waiting for PostgreSQL..."
+until docker compose exec -T postgres pg_isready -U postgres -q 2>/dev/null; do
+  sleep 1
+done
+echo "PostgreSQL is ready."
+"""
+
+# ── Dependencies ─────────────────────────────────────────────────
+
+[tasks.deps]
+description = "Install Elixir dependencies"
+run = "mix deps.get"
+
+# ── Database ─────────────────────────────────────────────────────
+
+[tasks."db:create"]
+description = "Create the development database"
+depends = ["services:wait"]
+run = "mix ecto.create"
+
+[tasks."db:migrate"]
+description = "Run database migrations"
+depends = ["services:wait"]
+run = "mix ecto.migrate"
+
+[tasks."db:seed"]
+description = "Seed the database with demo data"
+depends = ["services:wait"]
+run = "mix run priv/repo/seeds.exs"
+
+[tasks."db:setup"]
+description = "Create, migrate, and seed the database"
+depends = ["services:wait"]
+run = [
+  "mix ecto.create",
+  "mix ecto.migrate",
+  "mix run priv/repo/seeds.exs",
+]
+
+[tasks."db:reset"]
+description = "Drop, create, migrate, and seed the database"
+depends = ["services:wait"]
+run = [
+  "mix ecto.drop",
+  "mix ecto.create",
+  "mix ecto.migrate",
+  "mix run priv/repo/seeds.exs",
+]
+
+# ── Assets ───────────────────────────────────────────────────────
+
+[tasks."assets:setup"]
+description = "Install esbuild and tailwind if missing"
+run = [
+  "mix tailwind.install --if-missing",
+  "mix esbuild.install --if-missing",
+]
+
+[tasks."assets:build"]
+description = "Build frontend assets (CSS + JS)"
+run = [
+  "mix tailwind cyanea",
+  "mix esbuild cyanea",
+]
+
+# ── Setup ────────────────────────────────────────────────────────
+
+[tasks.setup]
+description = "Full first-time setup: services, deps, DB, assets"
+depends = ["services"]
+run = [
+  "mix deps.get",
+  "sleep 3",                   # give Postgres a moment after first boot
+]
+
+[tasks."setup:db"]
+description = "Set up the database (create + migrate + seed)"
+depends = ["services:wait"]
+run = [
+  "mix ecto.create",
+  "mix ecto.migrate",
+  "mix run priv/repo/seeds.exs",
+]
+
+[tasks."setup:assets"]
+description = "Install and build frontend assets"
+run = [
+  "mix tailwind.install --if-missing",
+  "mix esbuild.install --if-missing",
+  "mix tailwind cyanea",
+  "mix esbuild cyanea",
+]
+
+# ── Dev Server ───────────────────────────────────────────────────
+
+[tasks.server]
+description = "Start the Phoenix dev server"
+depends = ["services:wait"]
+run = "mix phx.server"
+
+[tasks.dev]
+description = "Start services then launch the Phoenix dev server"
+depends = ["services", "services:wait"]
+run = "mix phx.server"
+
+[tasks.iex]
+description = "Start an IEx session with the app loaded"
+depends = ["services:wait"]
+run = "iex -S mix"
+
+# ── Quality ──────────────────────────────────────────────────────
+
+[tasks.test]
+description = "Run the test suite"
+env = { MIX_ENV = "test" }
+depends = ["services:wait"]
+run = "mix test"
+
+[tasks.lint]
+description = "Run all linters (format check, credo, sobelow)"
+run = [
+  "mix format --check-formatted",
+  "mix credo --strict",
+  "mix sobelow --config",
+]
+
+[tasks.format]
+description = "Auto-format Elixir source files"
+run = "mix format"
+
+[tasks.compile]
+description = "Compile the project (warnings as errors)"
+run = "mix compile --warnings-as-errors"
+
+[tasks.dialyzer]
+description = "Run Dialyzer for type checking"
+run = "mix dialyzer"

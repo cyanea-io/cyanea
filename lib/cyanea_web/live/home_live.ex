@@ -6,7 +6,11 @@ defmodule CyaneaWeb.HomeLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, page_title: "Home")}
+    if socket.assigns[:current_user] do
+      {:ok, push_navigate(socket, to: ~p"/dashboard")}
+    else
+      {:ok, assign(socket, page_title: "Home")}
+    end
   end
 
   @impl true

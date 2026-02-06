@@ -34,7 +34,7 @@ defmodule Cyanea.MixProject do
   defp deps do
     [
       # Phoenix
-      {:phoenix, "~> 1.7.18"},
+      {:phoenix, "~> 1.8"},
       {:phoenix_ecto, "~> 4.6"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.5", only: :dev},
@@ -50,7 +50,7 @@ defmodule Cyanea.MixProject do
 
       # Authentication
       {:ueberauth, "~> 0.10"},
-      {:ueberauth_orcid, "~> 0.3"},
+      {:ueberauth_orcid, "~> 0.2"},
       {:bcrypt_elixir, "~> 3.0"},
       {:guardian, "~> 2.3"},
 
@@ -60,7 +60,7 @@ defmodule Cyanea.MixProject do
       {:sweet_xml, "~> 0.7"},
 
       # Search
-      {:meilisearch, "~> 0.22"},
+      {:meilisearch, "~> 0.20"},
 
       # Rust NIFs
       {:rustler, "~> 0.34"},
