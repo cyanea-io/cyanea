@@ -1,20 +1,360 @@
 # Cyanea Roadmap
 
-> From zero to federated "GitHub for Life Sciences"
+> From zero to the best Rust bioinformatics ecosystem + federated "GitHub for Life Sciences"
 
 ---
 
 ## Philosophy
 
-1. **Federation first** — Build the distributed architecture early, not as an afterthought
-2. **Artifacts over files** — Typed, versioned scientific objects with lineage
-3. **Prove the loop** — MVP must demonstrate: create → publish → discover → derive → credit
-4. **Community is the moat** — Social mechanics and trust are as important as features
-5. **Ship early, iterate fast** — Get feedback from real labs
+1. **Foundations first** — Build world-class Rust libraries before/alongside the platform
+2. **Federation first** — Build the distributed architecture early, not as an afterthought
+3. **Artifacts over files** — Typed, versioned scientific objects with lineage
+4. **Prove the loop** — MVP must demonstrate: create → publish → discover → derive → credit
+5. **Community is the moat** — Social mechanics and trust are as important as features
+6. **Ship early, iterate fast** — Get feedback from real users
 
 ---
 
-## Phase 0: Foundation (Current)
+## Two Tracks
+
+Cyanea development runs on **two parallel tracks**:
+
+```
+                    2026                           2027                    2028
+         Q1    Q2    Q3    Q4    Q1    Q2    Q3    Q4    Q1
+         ├─────┼─────┼─────┼─────┼─────┼─────┼─────┼─────┤
+LABS     │ L0  │ L1  │ L2  │ L3  │ L4  │ L5  │ L6  │     │  ← Rust ecosystem
+         │core │seq  │align│omics│gpu  │wasm │ml   │     │
+         ├─────┼─────┼─────┼─────┼─────┼─────┼─────┼─────┤
+PLATFORM │ P0  │ P1  │ P2  │ P3  │ P4  │ P5  │ P6  │ P7  │  ← Elixir/Phoenix
+         │found│ mvp │ fed │comm │life │repro│integ│scale│
+         └─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘
+```
+
+**Labs** feeds into **Platform**: as libraries mature, they power platform features.
+
+---
+
+# LABS TRACK: Rust Bioinformatics Ecosystem
+
+> Goal: Build the best open-source Rust libraries for life sciences by 2027
+
+---
+
+## Labs 0: Core Foundation (Q1 2026)
+
+**Goal:** Shared primitives and infrastructure
+
+### cyanea-core
+
+- [ ] Workspace setup (Cargo workspace, CI/CD)
+- [ ] Common traits (`Sequence`, `Annotation`, `Scored`, `Named`)
+- [ ] Error types with rich context (`thiserror` based)
+- [ ] Content addressing primitives (SHA256, BLAKE3)
+- [ ] Memory-mapped file utilities
+- [ ] Streaming/iterator patterns
+- [ ] Benchmarking infrastructure (criterion)
+- [ ] Fuzzing setup (cargo-fuzz)
+- [ ] Documentation standards
+
+### cyanea-io (basics)
+
+- [ ] Unified reader/writer traits
+- [ ] Compression support (gzip, zstd, bz2)
+- [ ] Streaming decompression
+- [ ] File format detection (magic bytes)
+
+---
+
+## Labs 1: Sequences (Q2 2026)
+
+**Goal:** Best-in-class sequence handling
+
+### cyanea-seq
+
+- [ ] **Parsers**
+  - [ ] FASTA parser (zero-copy, streaming)
+  - [ ] FASTQ parser (streaming, parallel)
+  - [ ] GenBank parser
+  - [ ] EMBL parser
+- [ ] **Sequence types**
+  - [ ] DNA sequence with validation
+  - [ ] RNA sequence with validation
+  - [ ] Protein sequence with validation
+  - [ ] Alphabet traits and custom alphabets
+- [ ] **Operations**
+  - [ ] Reverse complement
+  - [ ] Translation (codon tables)
+  - [ ] K-mer iteration (canonical k-mers)
+  - [ ] Minimizers
+  - [ ] Motif finding
+- [ ] **Quality**
+  - [ ] Phred score handling
+  - [ ] Quality trimming algorithms
+  - [ ] Quality filtering
+- [ ] **Indexing**
+  - [ ] Suffix arrays
+  - [ ] FM-index (basic)
+  - [ ] K-mer index / hash table
+- [ ] **Compression**
+  - [ ] 2-bit encoding for DNA
+  - [ ] Reference-based compression
+- [ ] **Python bindings** (cyanea-seq-py)
+  - [ ] PyO3 bindings for core types
+  - [ ] NumPy integration for sequences
+  - [ ] maturin packaging
+
+### Performance Targets
+
+| Operation | Target | Benchmark Against |
+|-----------|--------|-------------------|
+| FASTA parsing | 2 GB/s | needletail, BioPython |
+| FASTQ parsing | 1.5 GB/s | needletail, SeqIO |
+| K-mer counting (k=31) | 500 M/s | KMC, jellyfish |
+| Reverse complement | 5 GB/s | seqan3 |
+
+---
+
+## Labs 2: Alignment (Q3 2026)
+
+**Goal:** Fast, accurate sequence alignment (CPU + GPU)
+
+### cyanea-align
+
+- [ ] **Pairwise alignment**
+  - [ ] Smith-Waterman (local)
+  - [ ] Needleman-Wunsch (global)
+  - [ ] Semi-global alignment
+  - [ ] Affine gap penalties
+- [ ] **Scoring**
+  - [ ] BLOSUM matrices (30, 45, 62, 80, 90)
+  - [ ] PAM matrices
+  - [ ] Custom scoring matrices
+  - [ ] DNA/RNA scoring schemes
+- [ ] **SIMD acceleration**
+  - [ ] SSE2/AVX2 vectorization
+  - [ ] ARM NEON support
+  - [ ] Striped Smith-Waterman
+- [ ] **Heuristic alignment**
+  - [ ] Seed-and-extend
+  - [ ] Minimizer-based seeding
+  - [ ] Chaining algorithms
+- [ ] **Banded alignment**
+  - [ ] X-drop alignment
+  - [ ] Adaptive banding
+- [ ] **Multiple sequence alignment (basic)**
+  - [ ] Progressive alignment
+  - [ ] Guide tree construction
+- [ ] **Output formats**
+  - [ ] CIGAR string generation
+  - [ ] Alignment visualization
+
+### Performance Targets
+
+| Operation | Target | Benchmark Against |
+|-----------|--------|-------------------|
+| SW (CPU, single) | 10 GCUPS | parasail, SSW |
+| SW (CPU, batch) | 50 GCUPS | SWIMD |
+| SW (GPU, batch) | 500 GCUPS | NVBIO, GASAL2 |
+
+---
+
+## Labs 3: Omics Data Structures (Q4 2026)
+
+**Goal:** Efficient data structures for omics data
+
+### cyanea-omics
+
+- [ ] **Expression matrices**
+  - [ ] Dense matrix (row-major, column-major)
+  - [ ] Sparse matrix (CSR, CSC)
+  - [ ] Memory-mapped matrices
+  - [ ] Sample and feature metadata
+- [ ] **Genomic ranges**
+  - [ ] Interval trees
+  - [ ] Nested containment lists
+  - [ ] Range operations (overlap, merge, subtract)
+- [ ] **Annotations**
+  - [ ] Gene annotations
+  - [ ] Transcript annotations
+  - [ ] Feature hierarchies (gene → transcript → exon)
+- [ ] **Variants**
+  - [ ] Variant representation (SNV, indel, SV)
+  - [ ] Genotype encoding
+  - [ ] Allele frequency calculations
+
+### cyanea-io (extended)
+
+- [ ] **Alignment formats**
+  - [ ] SAM parser
+  - [ ] BAM reader (with index)
+  - [ ] CRAM reader (basic)
+- [ ] **Variant formats**
+  - [ ] VCF parser
+  - [ ] BCF reader
+- [ ] **Annotation formats**
+  - [ ] BED parser
+  - [ ] GFF/GTF parser
+  - [ ] GenePred parser
+- [ ] **Tabular formats**
+  - [ ] CSV/TSV (streaming, typed)
+  - [ ] Parquet reader/writer
+- [ ] **Array formats**
+  - [ ] HDF5 reader
+  - [ ] Zarr reader
+
+---
+
+## Labs 4: GPU Acceleration (Q1 2027)
+
+**Goal:** First-class GPU support for compute-heavy operations
+
+### cyanea-gpu
+
+- [ ] **Abstraction layer**
+  - [ ] `GpuContext` trait
+  - [ ] Device enumeration
+  - [ ] Memory management (host/device transfers)
+  - [ ] Automatic backend selection
+- [ ] **CUDA backend**
+  - [ ] cudarc integration
+  - [ ] Custom kernel support
+  - [ ] Batch operations
+- [ ] **Metal backend**
+  - [ ] metal-rs integration
+  - [ ] Compute pipeline setup
+  - [ ] Apple Silicon optimization
+- [ ] **Kernels**
+  - [ ] Batch Smith-Waterman
+  - [ ] K-mer counting (GPU)
+  - [ ] Matrix operations
+  - [ ] Distance calculations
+- [ ] **CPU fallback**
+  - [ ] Automatic fallback when no GPU
+  - [ ] Unified API regardless of backend
+
+### cyanea-align (GPU extension)
+
+- [ ] GPU batch alignment integration
+- [ ] Automatic CPU/GPU selection based on batch size
+- [ ] Memory-efficient batching for large datasets
+
+### Performance Targets
+
+| Operation | Target GPU | Target |
+|-----------|------------|--------|
+| SW batch alignment | RTX 4090 | 1 TCUPS |
+| SW batch alignment | M3 Max | 200 GCUPS |
+| K-mer counting | RTX 4090 | 2 B/s |
+
+---
+
+## Labs 5: WASM & Browser (Q2 2027)
+
+**Goal:** Run bioinformatics in the browser
+
+### cyanea-wasm
+
+- [ ] **Build infrastructure**
+  - [ ] wasm-pack setup
+  - [ ] Feature flags for WASM builds
+  - [ ] Bundle size optimization (<1MB core)
+- [ ] **JavaScript bindings**
+  - [ ] wasm-bindgen exports
+  - [ ] TypeScript type definitions
+  - [ ] Async operation support
+- [ ] **Browser runtime**
+  - [ ] Web Worker support
+  - [ ] Streaming file handling (File API)
+  - [ ] Progress callbacks
+  - [ ] Memory management utilities
+- [ ] **npm packages**
+  - [ ] @cyanea/seq
+  - [ ] @cyanea/align
+  - [ ] @cyanea/io
+
+### Browser Capabilities
+
+| Feature | Status |
+|---------|--------|
+| FASTA/FASTQ parsing | Full |
+| Sequence operations | Full |
+| Pairwise alignment | Full |
+| K-mer counting | Full |
+| BAM reading | Limited (no random access) |
+| GPU (WebGPU) | Future |
+
+---
+
+## Labs 6: Statistics & ML (Q3 2027)
+
+**Goal:** Statistical methods and ML primitives for life sciences
+
+### cyanea-stats
+
+- [ ] **Descriptive statistics**
+  - [ ] Streaming mean, variance, quantiles
+  - [ ] Histograms and distributions
+- [ ] **Hypothesis testing**
+  - [ ] t-tests, ANOVA
+  - [ ] Chi-square, Fisher's exact
+  - [ ] Multiple testing correction (FDR, Bonferroni)
+- [ ] **Dimensionality reduction**
+  - [ ] PCA
+  - [ ] t-SNE
+  - [ ] UMAP
+- [ ] **Clustering**
+  - [ ] K-means
+  - [ ] Hierarchical clustering
+  - [ ] DBSCAN
+
+### cyanea-ml
+
+- [ ] **Embeddings**
+  - [ ] Sequence embedding models
+  - [ ] Protein language model inference
+- [ ] **Classification**
+  - [ ] Sequence classification
+  - [ ] Feature extraction
+- [ ] **ONNX runtime integration**
+  - [ ] Model loading
+  - [ ] Inference API
+
+---
+
+## Labs: Future (2027+)
+
+### cyanea-struct
+
+- [ ] PDB/mmCIF parsing
+- [ ] Structure representation
+- [ ] Distance calculations
+- [ ] Secondary structure prediction
+- [ ] Structure alignment
+
+### cyanea-chem
+
+- [ ] SMILES/InChI parsing
+- [ ] Molecular fingerprints
+- [ ] Substructure search
+- [ ] Property calculation
+
+### cyanea-phylo
+
+- [ ] Newick/Nexus parsing
+- [ ] Tree data structures
+- [ ] Distance matrix methods
+- [ ] Phylogenetic inference (basic)
+
+---
+
+# PLATFORM TRACK: Federated R&D Hub
+
+> Goal: Build the federated "GitHub for Life Sciences"
+
+---
+
+## Platform 0: Foundation (Q1 2026)
 
 **Goal:** Scaffolding and core infrastructure
 
@@ -23,7 +363,7 @@
 - [x] Project structure (Phoenix + Rust NIFs)
 - [x] Docker Compose (Postgres, MinIO, Meilisearch)
 - [x] Configuration (dev/test/prod)
-- [x] Rust NIFs skeleton (FASTA, CSV, hash, compress)
+- [x] Rust NIFs skeleton (wraps cyanea-* crates)
 
 ### In Progress
 
@@ -42,11 +382,13 @@
 
 ---
 
-## Phase 1: MVP (v0.1)
+## Platform 1: MVP (v0.1) — Q2 2026
 
 **Goal:** Prove federation + artifact lineage + community sharing
 
 > "Install Cyanea Node in your lab. Keep internal work private. Publish the open parts to the Cyanea Network with one click. Others can fork, reproduce, and credit you."
+
+**Depends on Labs:** cyanea-core, cyanea-seq (for file previews)
 
 ### Authentication & Identity
 
@@ -129,9 +471,11 @@
 
 ---
 
-## Phase 2: Federation (v0.2)
+## Platform 2: Federation (v0.2) — Q3 2026
 
 **Goal:** Full federation capabilities between nodes and hub
+
+**Depends on Labs:** cyanea-core (content addressing, hashing)
 
 ### Sync Protocol
 
@@ -171,7 +515,7 @@
 
 ---
 
-## Phase 3: Community (v0.3)
+## Platform 3: Community (v0.3) — Q4 2026
 
 **Goal:** Social mechanics that make Cyanea feel alive
 
@@ -222,9 +566,11 @@
 
 ---
 
-## Phase 4: Life Sciences Features (v0.4)
+## Platform 4: Life Sciences Features (v0.4) — Q1 2027
 
 **Goal:** Domain-specific functionality for bioinformatics
+
+**Depends on Labs:** cyanea-seq, cyanea-align, cyanea-omics, cyanea-io
 
 ### File Previews
 
@@ -273,9 +619,11 @@
 
 ---
 
-## Phase 5: Reproducibility (v0.5)
+## Platform 5: Reproducibility (v0.5) — Q2 2027
 
 **Goal:** Trust through reproducibility and QC
+
+**Depends on Labs:** cyanea-core (hashing), cyanea-stats (QC)
 
 ### Pipeline Integration
 
@@ -326,7 +674,7 @@
 
 ---
 
-## Phase 6: Integrations (v0.6)
+## Platform 6: Integrations (v0.6) — Q3 2027
 
 **Goal:** Connect to the research ecosystem
 
@@ -365,9 +713,11 @@
 
 ---
 
-## Phase 7: Scale & Performance (v0.7)
+## Platform 7: Scale & Performance (v0.7) — Q4 2027
 
 **Goal:** Handle large datasets and many nodes
+
+**Depends on Labs:** cyanea-gpu (for compute), cyanea-wasm (for browser tools)
 
 ### Storage
 
@@ -405,7 +755,7 @@
 
 ---
 
-## Phase 8: Enterprise (v1.0)
+## Platform 8: Enterprise (v1.0) — Q1 2028
 
 **Goal:** Enterprise-ready, self-hosted platform
 
@@ -452,9 +802,11 @@
 
 ---
 
-## Phase 9: Intelligence (v1.x)
+## Platform 9: Intelligence (v1.x) — 2028+
 
 **Goal:** AI-powered research assistance
+
+**Depends on Labs:** cyanea-ml (embeddings, inference)
 
 ### Search & Discovery
 
@@ -520,6 +872,20 @@
 
 ## Milestones
 
+### Cyanea Labs (Rust Ecosystem)
+
+| Phase | Target | Key Deliverable | crates.io |
+|-------|--------|-----------------|-----------|
+| L0 | Q1 2026 | cyanea-core: traits, errors, hashing | cyanea-core |
+| L1 | Q2 2026 | cyanea-seq: FASTA/FASTQ, sequences, k-mers | cyanea-seq |
+| L2 | Q3 2026 | cyanea-align: SW, NW, SIMD acceleration | cyanea-align |
+| L3 | Q4 2026 | cyanea-omics: matrices, ranges, VCF | cyanea-omics |
+| L4 | Q1 2027 | cyanea-gpu: CUDA/Metal abstraction | cyanea-gpu |
+| L5 | Q2 2027 | cyanea-wasm: browser runtime, npm packages | @cyanea/* |
+| L6 | Q3 2027 | cyanea-stats, cyanea-ml: stats, embeddings | cyanea-stats |
+
+### Cyanea Platform (Federated Hub)
+
 | Version | Target | Key Deliverable |
 |---------|--------|-----------------|
 | v0.1 | Q2 2026 | MVP: Artifacts, Projects, Basic Federation, Lineage |
@@ -535,7 +901,22 @@
 
 ## Success Metrics
 
-### Phase 1 (MVP)
+### Cyanea Labs
+
+| Phase | Metric | Target |
+|-------|--------|--------|
+| L1 | crates.io downloads (cyanea-seq) | 1K/month |
+| L2 | GitHub stars (labs repo) | 500 |
+| L3 | PyPI downloads (cyanea-py) | 5K/month |
+| L5 | npm downloads (@cyanea/seq) | 2K/month |
+| L6 | Academic citations | 5 papers |
+| All | Benchmark performance | Fastest in class |
+| All | WASM bundle size | <1MB core |
+| All | Test coverage | >80% |
+
+### Cyanea Platform
+
+#### Platform 1 (MVP)
 
 | Metric | Target |
 |--------|--------|
@@ -546,7 +927,7 @@
 | Derivations created | 50 |
 | Page load time | <2s |
 
-### Phase 2-3 (Federation + Community)
+#### Platform 2-3 (Federation + Community)
 
 | Metric | Target |
 |--------|--------|
@@ -557,7 +938,7 @@
 | Discussions created | 500 |
 | Daily active users | >10% |
 
-### Phase 4-5 (Life Sciences + Repro)
+#### Platform 4-5 (Life Sciences + Repro)
 
 | Metric | Target |
 |--------|--------|
@@ -568,7 +949,7 @@
 | QC pass rate | >80% |
 | Scientific publication mention | Yes |
 
-### Phase 6+ (Scale)
+#### Platform 6+ (Scale)
 
 | Metric | Target |
 |--------|--------|
@@ -582,7 +963,17 @@
 
 ## Non-Goals (Deliberate Exclusions)
 
-Things we're explicitly NOT building (for now):
+### Cyanea Labs
+
+| Non-Goal | Reason |
+|----------|--------|
+| Rewrite every tool | Focus on core primitives first |
+| Support all GPU vendors day one | CUDA + Metal first, ROCm later |
+| 100% parity with established tools | Focus on common cases, iterate |
+| Build workflow orchestration | Provide building blocks, not engine |
+| Windows GPU support (initial) | Focus on Linux/macOS first |
+
+### Cyanea Platform
 
 | Non-Goal | Reason |
 |----------|--------|
@@ -601,21 +992,48 @@ Things we're explicitly NOT building (for now):
 
 Decisions to make as we build (Claude Code should propose options):
 
+### Cyanea Labs
+
 | Question | Phase | Considerations |
 |----------|-------|----------------|
-| Federation protocol | 1-2 | Custom, ActivityPub-inspired, OCI-like? |
-| Artifact schema strictness | 1 | Permissive MVP vs strict validation? |
-| Global ID format | 1 | `cyanea://org/project/artifact@version`? |
-| Event sourcing depth | 1 | Full ES vs hybrid approach? |
-| Manifest format | 1-2 | JSON, protobuf, custom? |
-| Sync conflict resolution | 2 | Immutable = no conflicts, but metadata? |
-| Key management | 2 | HSM, platform-managed, user-managed? |
-| Search federation | 2 | Centralized index vs distributed query? |
-| Compute for repro runs | 5 | Self-hosted only vs managed option? |
+| GPU abstraction strategy | L4 | Custom trait vs wgpu vs backend-specific |
+| SIMD approach | L2 | std::simd (nightly) vs simdeez vs hand-written |
+| WASM async model | L5 | Blocking + Workers vs async/await |
+| Error handling crate | L0 | thiserror vs anyhow vs custom |
+| Python binding style | L1+ | Thin bindings vs Pythonic wrappers |
+| Workspace vs multi-repo | L0 | Single Cargo workspace vs separate repos |
+| Minimum Rust version | L0 | Stable vs nightly (for SIMD, etc.) |
+| Benchmarking datasets | L1+ | Synthetic vs real public datasets |
+
+### Cyanea Platform
+
+| Question | Phase | Considerations |
+|----------|-------|----------------|
+| Federation protocol | P1-2 | Custom, ActivityPub-inspired, OCI-like? |
+| Artifact schema strictness | P1 | Permissive MVP vs strict validation? |
+| Global ID format | P1 | `cyanea://org/project/artifact@version`? |
+| Event sourcing depth | P1 | Full ES vs hybrid approach? |
+| Manifest format | P1-2 | JSON, protobuf, custom? |
+| Sync conflict resolution | P2 | Immutable = no conflicts, but metadata? |
+| Key management | P2 | HSM, platform-managed, user-managed? |
+| Search federation | P2 | Centralized index vs distributed query? |
+| Compute for repro runs | P5 | Self-hosted only vs managed option? |
 
 ---
 
 ## Principles
+
+### Cyanea Labs
+
+1. **Performance is a feature** — If it's not fast, it won't be used
+2. **WASM-first thinking** — Every library should work in the browser
+3. **GPU is not optional** — Number-crunching needs acceleration
+4. **Coherent APIs** — Consistent patterns across all crates
+5. **Zero magic** — Transparent, documented algorithms
+6. **Interop matters** — Python, JS, Elixir bindings are first-class
+7. **Benchmark everything** — Claims require evidence
+
+### Cyanea Platform
 
 1. **Federation is not optional** — Every feature should work in standalone and federated mode
 2. **Artifacts have identity** — Content-addressed, globally referenceable, typed

@@ -6,6 +6,31 @@
 
 ## Vision
 
+### The Strategy: Foundation First
+
+Cyanea is **two things**:
+
+1. **Cyanea Labs** — A world-class Rust bioinformatics ecosystem (libraries, tools, standards)
+2. **Cyanea Platform** — A federated R&D platform built on top of that ecosystem
+
+We build the **foundations first**. Before the platform ships, we create the best open-source Rust libraries for life sciences—coherent, fast, GPU-accelerated, and universally deployable (native + WASM). These libraries benefit everyone, establish Cyanea as a trusted name, and give our platform unmatched performance.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Cyanea Platform                              │
+│         (Federated R&D hub built on Cyanea Labs)                │
+├─────────────────────────────────────────────────────────────────┤
+│                      Cyanea Labs                                 │
+│    (Rust bioinformatics ecosystem — libraries & tools)          │
+│  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐       │
+│  │  cyanea-  │ │  cyanea-  │ │  cyanea-  │ │  cyanea-  │  ...  │
+│  │    seq    │ │   omics   │ │   chem    │ │    ml     │       │
+│  └───────────┘ └───────────┘ └───────────┘ └───────────┘       │
+├─────────────────────────────────────────────────────────────────┤
+│              Cross-cutting: GPU (CUDA/Metal) + WASM             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ### The Problem
 
 Benchling-style tools are great for *in-house* R&D, but fail at:
@@ -209,6 +234,7 @@ Cyanea must feel like a community platform, not a sterile LIMS:
 
 - Community-first, federated, artifact-native, reproducibility-obsessed
 - The open alternative that respects data ownership
+- Builders of foundational infrastructure (Rust libs) that everyone can use
 
 ### We Are Not (Initially)
 
@@ -218,7 +244,248 @@ Cyanea must feel like a community platform, not a sterile LIMS:
 
 ---
 
+## Cyanea Labs: Rust Bioinformatics Ecosystem
+
+### Why Build This First?
+
+The bioinformatics ecosystem is fragmented: Python wrappers around C code from the 90s, Java tools with GC pauses, R packages that don't scale. Modern life science computing deserves better.
+
+**Our bet:** Re-implement the bioinformatics stack in Rust—coherent, fast, safe, and portable. Make it the foundation everyone builds on, including us.
+
+| Problem | Cyanea Labs Solution |
+|---------|---------------------|
+| Fragmented tools, inconsistent APIs | Unified, coherent library design |
+| Python/R too slow for large data | Native Rust performance |
+| Can't run in browser | WASM compilation target |
+| No GPU acceleration | First-class CUDA/Metal support |
+| Hard to embed in other tools | Zero-dependency core, easy FFI |
+| Poor error handling | Rust's type system + Result types |
+
+### Design Principles
+
+1. **Coherent API design** — Consistent patterns across all libraries
+2. **Zero-copy where possible** — Memory-mapped files, streaming parsers
+3. **WASM-first thinking** — Every library should compile to WASM (feature-gated GPU)
+4. **GPU as first-class** — CUDA and Metal backends for compute-heavy operations
+5. **Transparent internals** — Well-documented algorithms, no magic
+6. **Extensible** — Traits and generics for customization
+7. **Tested against real data** — Benchmarks on public datasets, not toy examples
+8. **Interop-friendly** — C FFI, Python bindings (PyO3), Elixir NIFs
+
+### Library Architecture
+
+```
+cyanea-labs/
+├── cyanea-core/           # Shared primitives, traits, error types
+├── cyanea-seq/            # Sequence I/O and manipulation
+├── cyanea-align/          # Sequence alignment (local, global, MSA)
+├── cyanea-omics/          # Omics data structures (matrices, annotations)
+├── cyanea-stats/          # Statistical methods for life sciences
+├── cyanea-ml/             # ML primitives for bio (embeddings, etc.)
+├── cyanea-chem/           # Chemistry/small molecules
+├── cyanea-struct/         # Protein/nucleic acid structures
+├── cyanea-phylo/          # Phylogenetics and trees
+├── cyanea-io/             # File format parsers (unified)
+├── cyanea-gpu/            # GPU compute abstraction (CUDA/Metal)
+├── cyanea-wasm/           # WASM bindings and browser runtime
+└── cyanea-py/             # Python bindings (PyO3)
+```
+
+### Core Libraries
+
+#### cyanea-core
+
+Shared foundation for all libraries:
+
+- Common traits (`Sequence`, `Annotation`, `Scored`, etc.)
+- Error types with rich context
+- Memory-mapped file utilities
+- Streaming/iterator patterns
+- Content addressing primitives (hashing)
+
+#### cyanea-seq
+
+Sequence handling—the heart of bioinformatics:
+
+| Feature | Description |
+|---------|-------------|
+| **Parsers** | FASTA, FASTQ, GenBank, EMBL (streaming, zero-copy) |
+| **Sequence types** | DNA, RNA, Protein, with alphabet validation |
+| **Operations** | Reverse complement, translation, k-mers, motifs |
+| **Quality** | Phred scores, trimming, filtering |
+| **Indexing** | FM-index, suffix arrays for fast search |
+| **Compression** | 2-bit encoding, reference-based compression |
+
+#### cyanea-align
+
+Sequence alignment with GPU acceleration:
+
+| Feature | Description |
+|---------|-------------|
+| **Pairwise** | Smith-Waterman, Needleman-Wunsch (CPU + GPU) |
+| **Scoring** | BLOSUM, PAM, custom matrices |
+| **Heuristic** | Seed-and-extend, minimizers |
+| **MSA** | Progressive alignment, profile HMMs |
+| **GPU** | Batch alignment on CUDA/Metal for 100x speedup |
+
+#### cyanea-omics
+
+Data structures for omics data:
+
+| Feature | Description |
+|---------|-------------|
+| **Expression matrices** | Dense/sparse, with sample/feature metadata |
+| **Annotations** | Gene, transcript, protein annotations |
+| **Variants** | VCF parsing, variant representation |
+| **Single-cell** | AnnData-like structures, native Rust |
+| **Genomic ranges** | Interval trees, BED/GFF/GTF parsing |
+
+#### cyanea-io
+
+Unified file format handling:
+
+| Format | Type |
+|--------|------|
+| FASTA/FASTQ | Sequences |
+| SAM/BAM/CRAM | Alignments |
+| VCF/BCF | Variants |
+| BED/GFF/GTF | Annotations |
+| CSV/TSV/Parquet | Tabular |
+| HDF5/Zarr | Arrays |
+| PDB/mmCIF | Structures |
+| SDF/MOL | Molecules |
+
+#### cyanea-gpu
+
+GPU compute abstraction:
+
+```rust
+// Unified API for CUDA and Metal
+let gpu = GpuContext::new()?;  // Auto-detect backend
+let result = gpu.batch_align(&sequences, &reference)?;
+```
+
+| Feature | Description |
+|---------|-------------|
+| **Backend abstraction** | Same API for CUDA and Metal |
+| **Memory management** | Automatic host/device transfers |
+| **Batch operations** | Optimized for throughput |
+| **Fallback** | CPU fallback when no GPU available |
+
+#### cyanea-wasm
+
+Browser-ready bioinformatics:
+
+- All pure-Rust libraries compile to WASM
+- JavaScript/TypeScript bindings
+- Web Workers for background processing
+- Streaming for large files
+- Powers Cyanea Platform's browser-based tools
+
+### Performance Targets
+
+| Operation | Target | Comparison |
+|-----------|--------|------------|
+| FASTQ parsing | 2 GB/s | 10x faster than BioPython |
+| Smith-Waterman (CPU) | 10 GCUPS | Competitive with SIMD libs |
+| Smith-Waterman (GPU) | 1 TCUPS | Batch alignment on RTX 4090 |
+| k-mer counting | 500 M/s | Competitive with KMC |
+| CSV parsing | 1 GB/s | Faster than pandas |
+
+### WASM Considerations
+
+Libraries are designed for WASM from the start:
+
+- **Feature flags** — `#[cfg(feature = "wasm")]` for browser-specific code
+- **No GPU in WASM** — GPU features gated behind `cuda`/`metal` features
+- **Streaming I/O** — Works with browser File API
+- **Small binaries** — Tree-shaking friendly, minimal dependencies
+- **Async-ready** — Compatible with JavaScript async/await
+
+### GPU Strategy
+
+Support both major GPU platforms:
+
+| Platform | Backend | Status |
+|----------|---------|--------|
+| NVIDIA | CUDA (via cudarc/rust-cuda) | Primary |
+| Apple Silicon | Metal (via metal-rs) | Primary |
+| AMD | ROCm | Future |
+| WebGPU | wgpu | Future (enables GPU in browser) |
+
+**When to use GPU:**
+
+- Batch sequence alignment (>1000 sequences)
+- Large matrix operations (single-cell, expression)
+- ML inference (embeddings, predictions)
+- Structure calculations (molecular dynamics)
+
+### Language Bindings
+
+Make libraries accessible everywhere:
+
+| Language | Mechanism | Priority |
+|----------|-----------|----------|
+| **Rust** | Native | Primary |
+| **Python** | PyO3 + maturin | High |
+| **Elixir** | Rustler NIFs | High (platform) |
+| **JavaScript** | WASM + wasm-bindgen | High |
+| **C/C++** | cbindgen FFI | Medium |
+| **R** | extendr | Medium |
+
+### Relationship to Platform
+
+Cyanea Labs powers the Cyanea Platform:
+
+| Platform Feature | Cyanea Labs Library |
+|------------------|---------------------|
+| File previews (FASTA viewer) | cyanea-seq, cyanea-io |
+| QC validation | cyanea-seq, cyanea-stats |
+| Content hashing | cyanea-core |
+| Browser-based tools | cyanea-wasm |
+| Pipeline execution | All libraries via NIFs |
+| Search indexing | cyanea-seq (k-mers, embeddings) |
+
+### Success Metrics (Libraries)
+
+| Metric | Target |
+|--------|--------|
+| **crates.io downloads** | 10K/month within 1 year |
+| **GitHub stars** | 1K across ecosystem |
+| **PyPI downloads** | 50K/month (Python bindings) |
+| **npm downloads** | 10K/month (WASM bindings) |
+| **Academic citations** | Mentioned in 10+ papers |
+| **Performance** | Fastest in class for core operations |
+| **WASM binary size** | <1MB for core functionality |
+
+### Open Questions (Libraries)
+
+| Question | Options |
+|----------|---------|
+| GPU abstraction | Custom vs wgpu vs backend-specific |
+| WASM async model | Blocking vs async with Web Workers |
+| Python binding style | Pythonic wrappers vs thin bindings |
+| Monorepo vs multi-repo | Single repo vs separate crates |
+| SIMD strategy | Portable SIMD vs architecture-specific |
+
+---
+
 ## Tech Stack
+
+### Cyanea Labs (Rust Libraries)
+
+| Crate | Purpose | Targets |
+|-------|---------|---------|
+| **cyanea-core** | Shared primitives, traits, hashing | Native, WASM |
+| **cyanea-seq** | Sequence I/O, manipulation, indexing | Native, WASM |
+| **cyanea-align** | Pairwise and MSA alignment | Native, WASM, GPU |
+| **cyanea-omics** | Expression matrices, variants, ranges | Native, WASM |
+| **cyanea-io** | Unified file format parsing | Native, WASM |
+| **cyanea-gpu** | CUDA/Metal compute abstraction | Native (GPU only) |
+| **cyanea-wasm** | Browser runtime and JS bindings | WASM |
+| **cyanea-py** | Python bindings via PyO3 | Python |
+
+### Cyanea Platform (Elixir/Phoenix)
 
 | Layer | Technology | Why |
 |-------|------------|-----|
@@ -228,23 +495,26 @@ Cyanea must feel like a community platform, not a sterile LIMS:
 | **Database** | PostgreSQL 16 | JSONB, event sourcing friendly, proven |
 | **File Storage** | S3-compatible | AWS S3, MinIO (self-hosted), R2 |
 | **Search** | Meilisearch 1.11+ | Fast, typo-tolerant, self-hostable |
-| **Performance** | Rust NIFs | FASTA parsing, checksums, compression |
+| **Compute** | Cyanea Labs (Rust NIFs) | Native performance via Rustler |
 | **Auth** | ORCID OAuth + Guardian | Researcher identity + JWT |
 
-### Why Elixir/Phoenix?
+### Why Rust for Libraries?
+
+- **Performance** — Native speed, zero-cost abstractions
+- **Safety** — Memory safety without GC, fearless concurrency
+- **Portability** — Compile to native, WASM, embed anywhere
+- **GPU** — First-class CUDA/Metal via Rust ecosystem
+- **Ecosystem** — Growing bioinformatics community (rust-bio, noodles, etc.)
+- **FFI** — Easy bindings to Python (PyO3), Elixir (Rustler), C, JS
+
+### Why Elixir/Phoenix for Platform?
 
 - **Real-time collaboration** — Phoenix Channels/LiveView built for WebSockets
 - **Concurrent uploads** — BEAM handles thousands of connections
 - **Fault tolerance** — Supervisors restart failed processes
 - **Hot code reloading** — Deploy without dropping connections
 - **Distribution-friendly** — Built for federated/distributed systems
-
-### Why Rust NIFs?
-
-- **FASTA/FASTQ parsing** — GB-sized sequence files need native speed
-- **CSV processing** — Large datasets, streaming parse
-- **Checksums** — SHA256 for content addressing
-- **Compression** — zstd for storage efficiency
+- **Rust integration** — Rustler NIFs for compute-heavy operations
 
 ---
 
@@ -313,8 +583,85 @@ Prefer append-only history for artifacts + lineage:
 
 ## Project Structure
 
+### Monorepo Overview
+
 ```
-cyanea/
+cyanea-io/
+├── labs/                          # Cyanea Labs: Rust bioinformatics ecosystem
+│   ├── cyanea-core/               # Shared primitives, traits, errors
+│   ├── cyanea-seq/                # Sequence I/O and manipulation
+│   ├── cyanea-align/              # Sequence alignment (CPU + GPU)
+│   ├── cyanea-omics/              # Omics data structures
+│   ├── cyanea-stats/              # Statistical methods
+│   ├── cyanea-io/                 # File format parsers
+│   ├── cyanea-gpu/                # GPU abstraction (CUDA/Metal)
+│   ├── cyanea-wasm/               # WASM bindings + browser runtime
+│   ├── cyanea-py/                 # Python bindings (PyO3)
+│   └── Cargo.toml                 # Workspace manifest
+├── platform/                      # Cyanea Platform: Elixir/Phoenix app
+│   ├── lib/
+│   │   ├── cyanea/                # Business logic (contexts)
+│   │   └── cyanea_web/            # Web layer
+│   ├── native/                    # Rust NIFs (thin wrappers around labs/)
+│   ├── priv/
+│   ├── assets/
+│   ├── config/
+│   └── test/
+└── www/                           # Marketing website (Zola)
+```
+
+### Labs Structure (Rust)
+
+```
+labs/
+├── Cargo.toml                     # Workspace: all crates
+├── cyanea-core/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── traits.rs              # Sequence, Annotation, Scored, etc.
+│       ├── error.rs               # Rich error types
+│       ├── hash.rs                # Content addressing (SHA256, BLAKE3)
+│       └── mmap.rs                # Memory-mapped file utilities
+├── cyanea-seq/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── fasta.rs               # FASTA parser (zero-copy)
+│       ├── fastq.rs               # FASTQ parser (streaming)
+│       ├── sequence.rs            # DNA, RNA, Protein types
+│       ├── kmer.rs                # K-mer counting, minimizers
+│       ├── index.rs               # FM-index, suffix arrays
+│       └── quality.rs             # Phred scores, trimming
+├── cyanea-align/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── smith_waterman.rs      # Local alignment
+│       ├── needleman_wunsch.rs    # Global alignment
+│       ├── scoring.rs             # BLOSUM, PAM, custom
+│       ├── simd.rs                # SIMD-accelerated alignment
+│       └── gpu.rs                 # GPU batch alignment
+├── cyanea-gpu/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── context.rs             # GpuContext abstraction
+│       ├── cuda.rs                # CUDA backend
+│       ├── metal.rs               # Metal backend
+│       └── kernels/               # Compute kernels
+└── cyanea-wasm/
+    ├── Cargo.toml
+    └── src/
+        ├── lib.rs
+        ├── bindings.rs            # wasm-bindgen exports
+        └── runtime.rs             # Browser runtime utilities
+```
+
+### Platform Structure (Elixir)
+
+```
+platform/
 ├── lib/
 │   ├── cyanea/                    # Business logic (contexts)
 │   │   ├── accounts/              # Users, authentication, ORCID
@@ -327,7 +674,7 @@ cyanea/
 │   │   ├── search/                # Meilisearch integration
 │   │   ├── application.ex         # OTP application
 │   │   ├── repo.ex                # Ecto repo
-│   │   └── native.ex              # Rust NIF bindings
+│   │   └── native.ex              # Rust NIF bindings (wraps labs/)
 │   └── cyanea_web/                # Web layer
 │       ├── live/                  # LiveView pages
 │       ├── components/            # UI components
@@ -335,13 +682,10 @@ cyanea/
 │       ├── endpoint.ex
 │       └── router.ex
 ├── native/
-│   └── cyanea_native/             # Rust NIFs
+│   └── cyanea_nif/                # Thin NIF wrappers around labs/
+│       ├── Cargo.toml             # Depends on cyanea-* crates
 │       └── src/
-│           ├── lib.rs             # NIF exports
-│           ├── fasta.rs           # FASTA/FASTQ parsing
-│           ├── csv_parser.rs      # CSV streaming
-│           ├── hash.rs            # SHA256 checksums
-│           └── compress.rs        # zstd compression
+│           └── lib.rs             # Rustler NIF exports
 ├── priv/
 │   ├── repo/migrations/           # Database migrations
 │   └── static/                    # Static assets
@@ -563,6 +907,19 @@ cd native/cyanea_native && cargo build --release
 
 ## Success Metrics
 
+### Cyanea Labs (Rust Ecosystem)
+
+| Area | Metric |
+|------|--------|
+| **Adoption** | crates.io downloads, PyPI downloads, npm downloads |
+| **Performance** | Benchmarks vs alternatives (BioPython, SeqAn, etc.) |
+| **Quality** | Test coverage, fuzzing coverage, zero CVEs |
+| **Community** | GitHub stars, contributors, issues resolved |
+| **Reach** | Academic citations, blog posts, conference talks |
+| **Binaries** | WASM bundle size <1MB, native binary size |
+
+### Cyanea Platform
+
 | Area | Metric |
 |------|--------|
 | **Adoption** | Nodes installed, active monthly labs/users |
@@ -574,6 +931,15 @@ cd native/cyanea_native && cargo build --release
 ---
 
 ## Non-Goals (Deliberate Scope Limits)
+
+### Cyanea Labs
+
+- Rewrite every bioinformatics tool (focus on core primitives first)
+- Support every GPU vendor from day one (CUDA + Metal first)
+- Achieve 100% parity with established tools (focus on common use cases)
+- Build a full workflow engine (provide building blocks instead)
+
+### Cyanea Platform
 
 - Perfectly model "all of biology" in one ontology from day one
 - Replace every existing workflow engine (integrate + wrap instead)
@@ -589,6 +955,21 @@ cd native/cyanea_native && cargo build --release
 
 These are areas where Claude Code should propose options, not assume:
 
+### Cyanea Labs (Rust)
+
+| Question | Options to Consider |
+|----------|---------------------|
+| GPU abstraction? | Custom trait vs wgpu vs backend-specific (cudarc/metal-rs) |
+| SIMD strategy? | Portable SIMD (std::simd) vs architecture-specific (AVX2, NEON) |
+| WASM async model? | Blocking + Web Workers vs async/await + wasm-bindgen-futures |
+| Error handling? | thiserror vs anyhow vs custom error types |
+| Repo structure? | Monorepo (Cargo workspace) vs separate repositories |
+| Python binding style? | Pythonic wrappers vs thin bindings vs both |
+| Build system for bindings? | maturin vs setuptools-rust for Python |
+| Versioning? | Lockstep versions vs independent semver |
+
+### Cyanea Platform
+
 | Question | Options to Consider |
 |----------|---------------------|
 | Federation protocol? | Custom vs ActivityPub-ish vs OCI-like registries |
@@ -601,6 +982,9 @@ These are areas where Claude Code should propose options, not assume:
 
 ## Related Files
 
-- [ROADMAP.md](ROADMAP.md) — Development roadmap with phases
+- [ROADMAP.md](ROADMAP.md) — Development roadmap (Labs + Platform phases)
 - [README.md](../README.md) — Project overview
 - [docker-compose.yml](../docker-compose.yml) — Local development services
+- `labs/` — Rust bioinformatics ecosystem (Cargo workspace)
+- `platform/` — Elixir/Phoenix application
+- `www/` — Marketing website (Zola)
