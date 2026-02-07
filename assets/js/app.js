@@ -49,6 +49,19 @@ Hooks.DarkMode = {
   }
 }
 
+// Copy to clipboard
+Hooks.CopyToClipboard = {
+  mounted() {
+    this.el.addEventListener("click", () => {
+      const text = this.el.dataset.copyText
+      navigator.clipboard.writeText(text).then(() => {
+        this.el.dataset.copied = "true"
+        setTimeout(() => { this.el.dataset.copied = "false" }, 2000)
+      })
+    })
+  }
+}
+
 // File upload with progress
 Hooks.FileUpload = {
   mounted() {

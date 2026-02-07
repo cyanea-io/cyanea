@@ -67,6 +67,9 @@ defmodule CyaneaWeb do
     quote do
       import Phoenix.HTML
       import CyaneaWeb.CoreComponents
+      import CyaneaWeb.UIComponents
+      import CyaneaWeb.DataComponents
+      import CyaneaWeb.ScienceComponents
       use Gettext, backend: CyaneaWeb.Gettext
 
       alias Phoenix.LiveView.JS
