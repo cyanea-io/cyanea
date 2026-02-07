@@ -11,12 +11,12 @@ defmodule Cyanea.Native do
   - **Compression** — zstd compress/decompress (cyanea-core)
   - **Sequences** — Validation, operations, k-mers, FASTA/FASTQ parsing (cyanea-seq)
   - **CSV** — Column info and preview (cyanea-io)
+  - **Alignment** — Pairwise DNA/protein alignment, batch alignment (cyanea-align)
+  - **Statistics** — Descriptive stats, correlation, hypothesis testing, p-value correction (cyanea-stats)
+  - **Omics** — Variant classification, genomic intervals, expression matrices (cyanea-omics)
 
   ## Planned
 
-  - **Alignment** — Pairwise and batch sequence alignment (cyanea-align)
-  - **Omics** — VCF, BED, expression matrices (cyanea-omics)
-  - **Statistics** — Descriptive stats, hypothesis testing (cyanea-stats)
   - **ML** — Embeddings, clustering (cyanea-ml)
   - **Chemistry** — SMILES parsing, molecular properties (cyanea-chem)
   - **Structures** — PDB/mmCIF parsing, RMSD (cyanea-struct)
@@ -108,30 +108,72 @@ defmodule Cyanea.Native do
   def csv_preview(_path, _limit \\ 100), do: :erlang.nif_error(:nif_not_loaded)
 
   # ===========================================================================
-  # cyanea-align — Sequence Alignment (planned)
+  # cyanea-align — Sequence Alignment
   # ===========================================================================
 
-  # def align_pairwise(_seq_a, _seq_b, _opts \\ %{}),
-  #   do: :erlang.nif_error(:nif_not_loaded)
+  @doc "Align two DNA sequences with default scoring (+2/-1/-5/-2). Mode: \"local\", \"global\", or \"semiglobal\""
+  def align_dna(_query, _target, _mode), do: :erlang.nif_error(:nif_not_loaded)
 
-  # def align_batch(_sequences, _reference, _opts \\ %{}),
-  #   do: :erlang.nif_error(:nif_not_loaded)
+  @doc "Align two DNA sequences with custom scoring parameters"
+  def align_dna_custom(_query, _target, _mode, _match_score, _mismatch_score, _gap_open, _gap_extend),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Align two protein sequences. Matrix: \"blosum62\", \"blosum45\", \"blosum80\", or \"pam250\""
+  def align_protein(_query, _target, _mode, _matrix), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Batch-align a list of {query, target} DNA pairs (runs on DirtyCpu scheduler)"
+  def align_batch_dna(_pairs, _mode), do: :erlang.nif_error(:nif_not_loaded)
 
   # ===========================================================================
-  # cyanea-omics — Omics Data Structures (planned)
+  # cyanea-stats — Statistical Methods
   # ===========================================================================
 
-  # def parse_vcf(_path), do: :erlang.nif_error(:nif_not_loaded)
-  # def parse_bed(_path), do: :erlang.nif_error(:nif_not_loaded)
-  # def expression_matrix_info(_path), do: :erlang.nif_error(:nif_not_loaded)
+  @doc "Compute descriptive statistics (15 fields) for a list of floats"
+  def descriptive_stats(_data), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Compute Pearson product-moment correlation coefficient"
+  def pearson_correlation(_x, _y), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Compute Spearman rank correlation coefficient"
+  def spearman_correlation(_x, _y), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "One-sample t-test (test if population mean equals mu)"
+  def t_test_one_sample(_data, _mu), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Two-sample t-test. Set equal_var to true for Student's, false for Welch's"
+  def t_test_two_sample(_x, _y, _equal_var), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Mann-Whitney U test (non-parametric, two independent samples)"
+  def mann_whitney_u(_x, _y), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Bonferroni p-value correction (controls family-wise error rate)"
+  def p_adjust_bonferroni(_p_values), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Benjamini-Hochberg p-value correction (controls false discovery rate)"
+  def p_adjust_bh(_p_values), do: :erlang.nif_error(:nif_not_loaded)
 
   # ===========================================================================
-  # cyanea-stats — Statistical Methods (planned)
+  # cyanea-omics — Omics Data Structures
   # ===========================================================================
 
-  # def descriptive_stats(_data), do: :erlang.nif_error(:nif_not_loaded)
-  # def test_enrichment(_foreground, _background),
-  #   do: :erlang.nif_error(:nif_not_loaded)
+  @doc "Classify a genomic variant (SNV, insertion, deletion, etc.)"
+  def classify_variant(_chrom, _position, _ref_allele, _alt_alleles),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Merge overlapping genomic intervals (parallel arrays of chrom, start, end)"
+  def merge_genomic_intervals(_chroms, _starts, _ends),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Total bases covered on a chromosome (after merging overlaps)"
+  def genomic_coverage(_chroms, _starts, _ends, _query_chrom),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Compute summary statistics for an expression matrix (2D list of floats)"
+  def expression_summary(_data, _feature_names, _sample_names),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Log2-transform a matrix: log2(x + pseudocount) for all values"
+  def log_transform_matrix(_data, _pseudocount), do: :erlang.nif_error(:nif_not_loaded)
 
   # ===========================================================================
   # cyanea-ml — ML Primitives (planned)
@@ -175,6 +217,8 @@ end
 # Bridge structs — match Rust NifStruct modules
 # ===========================================================================
 
+# --- cyanea-seq ---
+
 defmodule Cyanea.Native.FastaStats do
   @moduledoc "FASTA file statistics (cyanea-seq)"
   defstruct [:sequence_count, :total_bases, :gc_content, :avg_length]
@@ -196,22 +240,50 @@ defmodule Cyanea.Native.FastqStats do
              :mean_quality, :q20_fraction, :q30_fraction]
 end
 
-# Planned bridge structs — uncomment as Rust NIFs are implemented:
+# --- cyanea-align ---
 
-# defmodule Cyanea.Native.AlignmentResult do
-#   @moduledoc "Pairwise alignment result (cyanea-align)"
-#   defstruct [:score, :aligned_a, :aligned_b, :cigar]
-# end
+defmodule Cyanea.Native.AlignmentResult do
+  @moduledoc "Pairwise alignment result (cyanea-align)"
+  defstruct [:score, :aligned_query, :aligned_target,
+             :query_start, :query_end, :target_start, :target_end,
+             :cigar, :identity, :num_matches, :num_mismatches,
+             :num_gaps, :alignment_length]
+end
 
-# defmodule Cyanea.Native.VcfRecord do
-#   @moduledoc "VCF variant record (cyanea-omics)"
-#   defstruct [:chrom, :pos, :ref, :alt, :qual, :filter, :info]
-# end
+# --- cyanea-stats ---
 
-# defmodule Cyanea.Native.DescriptiveStats do
-#   @moduledoc "Descriptive statistics result (cyanea-stats)"
-#   defstruct [:mean, :median, :variance, :min, :max, :q1, :q3]
-# end
+defmodule Cyanea.Native.DescriptiveStats do
+  @moduledoc "Descriptive statistics result (cyanea-stats)"
+  defstruct [:count, :mean, :median, :variance, :sample_variance,
+             :std_dev, :sample_std_dev, :min, :max, :range,
+             :q1, :q3, :iqr, :skewness, :kurtosis]
+end
+
+defmodule Cyanea.Native.TestResult do
+  @moduledoc "Hypothesis test result (cyanea-stats)"
+  defstruct [:statistic, :p_value, :degrees_of_freedom, :method]
+end
+
+# --- cyanea-omics ---
+
+defmodule Cyanea.Native.VariantClassification do
+  @moduledoc "Variant classification result (cyanea-omics)"
+  defstruct [:chrom, :position, :variant_type,
+             :is_snv, :is_indel, :is_transition, :is_transversion]
+end
+
+defmodule Cyanea.Native.GenomicInterval do
+  @moduledoc "Genomic interval (cyanea-omics)"
+  defstruct [:chrom, :start, :end, :strand]
+end
+
+defmodule Cyanea.Native.ExpressionSummary do
+  @moduledoc "Expression matrix summary (cyanea-omics)"
+  defstruct [:n_features, :n_samples, :feature_names, :sample_names,
+             :feature_means, :sample_means]
+end
+
+# --- Planned bridge structs (uncomment as Rust NIFs are implemented) ---
 
 # defmodule Cyanea.Native.MolecularProperties do
 #   @moduledoc "Molecular properties (cyanea-chem)"
