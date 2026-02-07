@@ -9,7 +9,7 @@ defmodule Cyanea.Native do
 
   - **Hashing** — SHA256 checksums (cyanea-core)
   - **Compression** — zstd compress/decompress (cyanea-core)
-  - **FASTA/FASTQ** — Sequence file statistics (cyanea-seq)
+  - **Sequences** — Validation, operations, k-mers, FASTA/FASTQ parsing (cyanea-seq)
   - **CSV** — Column info and preview (cyanea-io)
 
   ## Planned
@@ -51,6 +51,51 @@ defmodule Cyanea.Native do
 
   @doc "Get statistics from a FASTA/FASTQ file"
   def fasta_stats(_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  # --- Sequence validation --------------------------------------------------
+
+  @doc "Validate and uppercase a DNA sequence (IUPAC alphabet)"
+  def validate_dna(_data), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Validate and uppercase an RNA sequence (IUPAC alphabet)"
+  def validate_rna(_data), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Validate and uppercase a protein sequence"
+  def validate_protein(_data), do: :erlang.nif_error(:nif_not_loaded)
+
+  # --- DNA operations -------------------------------------------------------
+
+  @doc "Return the reverse complement of a DNA sequence"
+  def dna_reverse_complement(_data), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Transcribe DNA to RNA (T → U)"
+  def dna_transcribe(_data), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Calculate GC content of a DNA sequence (fraction 0.0–1.0)"
+  def dna_gc_content(_data), do: :erlang.nif_error(:nif_not_loaded)
+
+  # --- RNA operations -------------------------------------------------------
+
+  @doc "Translate an RNA sequence to protein (NCBI Table 1)"
+  def rna_translate(_data), do: :erlang.nif_error(:nif_not_loaded)
+
+  # --- K-mers ---------------------------------------------------------------
+
+  @doc "Extract k-mers from a DNA sequence as a list of binaries"
+  def sequence_kmers(_data, _k), do: :erlang.nif_error(:nif_not_loaded)
+
+  # --- FASTQ ----------------------------------------------------------------
+
+  @doc "Parse a FASTQ file and return all records"
+  def parse_fastq(_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Get streaming statistics from a FASTQ file"
+  def fastq_stats(_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  # --- Protein --------------------------------------------------------------
+
+  @doc "Calculate molecular weight of a protein sequence (Daltons)"
+  def protein_molecular_weight(_data), do: :erlang.nif_error(:nif_not_loaded)
 
   # ===========================================================================
   # cyanea-io — File Format Parsing
@@ -138,6 +183,17 @@ end
 defmodule Cyanea.Native.CsvInfo do
   @moduledoc "CSV file metadata (cyanea-io)"
   defstruct [:row_count, :column_count, :columns, :has_headers]
+end
+
+defmodule Cyanea.Native.FastqRecord do
+  @moduledoc "FASTQ record (cyanea-seq)"
+  defstruct [:name, :description, :sequence, :quality]
+end
+
+defmodule Cyanea.Native.FastqStats do
+  @moduledoc "FASTQ file statistics (cyanea-seq)"
+  defstruct [:sequence_count, :total_bases, :gc_content, :avg_length,
+             :mean_quality, :q20_fraction, :q30_fraction]
 end
 
 # Planned bridge structs — uncomment as Rust NIFs are implemented:

@@ -6,6 +6,9 @@
 
 use rustler::NifStruct;
 
+// Import traits needed for FastqRecord field access.
+use cyanea_core::{Annotated, Sequence};
+
 rustler::init!("Elixir.Cyanea.Native");
 
 // ---------------------------------------------------------------------------
@@ -45,6 +48,8 @@ fn zstd_decompress(data: Vec<u8>) -> Result<Vec<u8>, String> {
 // cyanea-seq — Sequence I/O
 // ===========================================================================
 
+// --- Bridge structs --------------------------------------------------------
+
 #[derive(Debug, NifStruct)]
 #[module = "Cyanea.Native.FastaStats"]
 pub struct FastaStatsNif {
@@ -65,11 +70,150 @@ impl From<cyanea_seq::FastaStats> for FastaStatsNif {
     }
 }
 
+#[derive(Debug, NifStruct)]
+#[module = "Cyanea.Native.FastqRecord"]
+pub struct FastqRecordNif {
+    pub name: String,
+    pub description: String,
+    pub sequence: Vec<u8>,
+    pub quality: Vec<u8>,
+}
+
+impl From<cyanea_seq::FastqRecord> for FastqRecordNif {
+    fn from(r: cyanea_seq::FastqRecord) -> Self {
+        let name = r.name().to_string();
+        let description = r.description().unwrap_or("").to_string();
+        let quality = r.quality().as_slice().to_vec();
+        let sequence = r.sequence().as_bytes().to_vec();
+        Self {
+            name,
+            description,
+            sequence,
+            quality,
+        }
+    }
+}
+
+#[derive(Debug, NifStruct)]
+#[module = "Cyanea.Native.FastqStats"]
+pub struct FastqStatsNif {
+    pub sequence_count: u64,
+    pub total_bases: u64,
+    pub gc_content: f64,
+    pub avg_length: f64,
+    pub mean_quality: f64,
+    pub q20_fraction: f64,
+    pub q30_fraction: f64,
+}
+
+impl From<cyanea_seq::FastqStats> for FastqStatsNif {
+    fn from(s: cyanea_seq::FastqStats) -> Self {
+        Self {
+            sequence_count: s.sequence_count,
+            total_bases: s.total_bases,
+            gc_content: s.gc_content,
+            avg_length: s.avg_length,
+            mean_quality: s.mean_quality,
+            q20_fraction: s.q20_fraction,
+            q30_fraction: s.q30_fraction,
+        }
+    }
+}
+
+// --- FASTA -----------------------------------------------------------------
+
 #[rustler::nif(schedule = "DirtyCpu")]
 fn fasta_stats(path: String) -> Result<FastaStatsNif, String> {
     cyanea_seq::parse_fasta_stats(&path)
         .map(FastaStatsNif::from)
         .map_err(to_nif_error)
+}
+
+// --- Sequence validation ---------------------------------------------------
+
+#[rustler::nif]
+fn validate_dna(data: Vec<u8>) -> Result<Vec<u8>, String> {
+    let seq = cyanea_seq::DnaSequence::new(&data).map_err(to_nif_error)?;
+    Ok(seq.into_bytes())
+}
+
+#[rustler::nif]
+fn validate_rna(data: Vec<u8>) -> Result<Vec<u8>, String> {
+    let seq = cyanea_seq::RnaSequence::new(&data).map_err(to_nif_error)?;
+    Ok(seq.into_bytes())
+}
+
+#[rustler::nif]
+fn validate_protein(data: Vec<u8>) -> Result<Vec<u8>, String> {
+    let seq = cyanea_seq::ProteinSequence::new(&data).map_err(to_nif_error)?;
+    Ok(seq.into_bytes())
+}
+
+// --- DNA operations --------------------------------------------------------
+
+#[rustler::nif]
+fn dna_reverse_complement(data: Vec<u8>) -> Result<Vec<u8>, String> {
+    let seq = cyanea_seq::DnaSequence::new(&data).map_err(to_nif_error)?;
+    Ok(seq.reverse_complement().into_bytes())
+}
+
+#[rustler::nif]
+fn dna_transcribe(data: Vec<u8>) -> Result<Vec<u8>, String> {
+    let seq = cyanea_seq::DnaSequence::new(&data).map_err(to_nif_error)?;
+    Ok(seq.transcribe().into_bytes())
+}
+
+#[rustler::nif]
+fn dna_gc_content(data: Vec<u8>) -> Result<f64, String> {
+    let seq = cyanea_seq::DnaSequence::new(&data).map_err(to_nif_error)?;
+    Ok(seq.gc_content())
+}
+
+// --- RNA operations --------------------------------------------------------
+
+#[rustler::nif]
+fn rna_translate(data: Vec<u8>) -> Result<Vec<u8>, String> {
+    let seq = cyanea_seq::RnaSequence::new(&data).map_err(to_nif_error)?;
+    seq.translate()
+        .map(|p| p.into_bytes())
+        .map_err(to_nif_error)
+}
+
+// --- K-mers ----------------------------------------------------------------
+
+#[rustler::nif]
+fn sequence_kmers(data: Vec<u8>, k: usize) -> Result<Vec<Vec<u8>>, String> {
+    let seq = cyanea_seq::DnaSequence::new(&data).map_err(to_nif_error)?;
+    let kmers = seq
+        .kmers(k)
+        .map_err(to_nif_error)?
+        .map(|kmer| kmer.to_vec())
+        .collect();
+    Ok(kmers)
+}
+
+// --- FASTQ -----------------------------------------------------------------
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn parse_fastq(path: String) -> Result<Vec<FastqRecordNif>, String> {
+    cyanea_seq::parse_fastq_file(&path)
+        .map(|records| records.into_iter().map(FastqRecordNif::from).collect())
+        .map_err(to_nif_error)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn fastq_stats(path: String) -> Result<FastqStatsNif, String> {
+    cyanea_seq::parse_fastq_stats(&path)
+        .map(FastqStatsNif::from)
+        .map_err(to_nif_error)
+}
+
+// --- Protein ---------------------------------------------------------------
+
+#[rustler::nif]
+fn protein_molecular_weight(data: Vec<u8>) -> Result<f64, String> {
+    let seq = cyanea_seq::ProteinSequence::new(&data).map_err(to_nif_error)?;
+    Ok(seq.molecular_weight())
 }
 
 // ===========================================================================
