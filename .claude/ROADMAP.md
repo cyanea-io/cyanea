@@ -180,7 +180,6 @@ PLATFORM │ P0  │ P1  │ P2  │ P3  │ P4  │ P5  │ P6  │ P7  │  �
 - [x] **Multiple testing correction** — Bonferroni, Benjamini-Hochberg FDR
 - [x] **Dimensionality reduction** — PCA (power iteration)
 - [ ] ANOVA, Chi-square, Fisher's exact (not implemented)
-- [ ] UMAP (not implemented)
 
 ### cyanea-ml
 
@@ -189,7 +188,7 @@ PLATFORM │ P0  │ P1  │ P2  │ P3  │ P4  │ P5  │ P6  │ P7  │  �
 - [x] **Encoding** — One-hot and label encoding for DNA/RNA/protein
 - [x] **Embeddings** — K-mer frequency embeddings, composition vectors, batch embedding, pairwise cosine distances
 - [x] **Inference** — KNN (classify/regress), linear regression (normal equation)
-- [x] **Dimensionality reduction** — PCA and t-SNE
+- [x] **Dimensionality reduction** — PCA, t-SNE, and UMAP
 - [x] **Evaluation** — Silhouette score/samples
 - [x] **Normalization** — min-max, z-score, L2 (row-wise and column-wise)
 - [ ] ONNX runtime integration (deferred)
