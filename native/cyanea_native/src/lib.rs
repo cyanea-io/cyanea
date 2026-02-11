@@ -994,6 +994,52 @@ fn tsne(
         .map_err(to_nif_error)
 }
 
+#[derive(Debug, NifStruct)]
+#[module = "Cyanea.Native.UmapResult"]
+pub struct UmapResultNif {
+    pub embedding: Vec<f64>,
+    pub n_samples: usize,
+    pub n_components: usize,
+    pub n_epochs: usize,
+}
+
+impl From<cyanea_ml::UmapResult> for UmapResultNif {
+    fn from(r: cyanea_ml::UmapResult) -> Self {
+        Self {
+            embedding: r.embedding,
+            n_samples: r.n_samples,
+            n_components: r.n_components,
+            n_epochs: r.n_epochs,
+        }
+    }
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn umap(
+    data: Vec<f64>,
+    n_features: usize,
+    n_components: usize,
+    n_neighbors: usize,
+    min_dist: f64,
+    n_epochs: usize,
+    metric: String,
+    seed: u64,
+) -> Result<UmapResultNif, String> {
+    let metric = parse_distance_metric(&metric)?;
+    let config = cyanea_ml::UmapConfig {
+        n_components,
+        n_neighbors,
+        min_dist,
+        n_epochs,
+        metric,
+        seed,
+        ..Default::default()
+    };
+    cyanea_ml::umap(&data, n_features, &config)
+        .map(UmapResultNif::from)
+        .map_err(to_nif_error)
+}
+
 #[rustler::nif]
 fn kmer_embedding(sequence: Vec<u8>, k: usize, alphabet: String) -> Result<Vec<f64>, String> {
     let alphabet = parse_alphabet(&alphabet)?;

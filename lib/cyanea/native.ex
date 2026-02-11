@@ -206,6 +206,10 @@ defmodule Cyanea.Native do
   def tsne(_data, _n_features, _n_components, _perplexity, _n_iter),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  @doc "UMAP dimensionality reduction. Metric: \"euclidean\", \"manhattan\", or \"cosine\""
+  def umap(_data, _n_features, _n_components, _n_neighbors, _min_dist, _n_epochs, _metric, _seed),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   @doc "Compute normalized k-mer frequency embedding for a sequence"
   def kmer_embedding(_sequence, _k, _alphabet), do: :erlang.nif_error(:nif_not_loaded)
 
@@ -397,6 +401,11 @@ end
 defmodule Cyanea.Native.TsneResult do
   @moduledoc "t-SNE result (cyanea-ml)"
   defstruct [:embedding, :n_samples, :n_components, :kl_divergence]
+end
+
+defmodule Cyanea.Native.UmapResult do
+  @moduledoc "UMAP result (cyanea-ml)"
+  defstruct [:embedding, :n_samples, :n_components, :n_epochs]
 end
 
 # --- cyanea-chem ---
