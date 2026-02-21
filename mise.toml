@@ -74,6 +74,25 @@ run = [
   "mix run priv/repo/seeds.exs",
 ]
 
+# ── WASM ─────────────────────────────────────────────────────────
+# Build the Rust WASM module and vendor into the Phoenix app.
+
+[tasks."wasm:build"]
+description = "Build WASM from labs/cyanea-wasm (wasm-pack + tsc)"
+dir = "{{config_root}}/../labs/cyanea-wasm"
+run = [
+  "wasm-pack build --target web --features wasm",
+  "npx tsc --project tsconfig.json || true",
+]
+
+[tasks."wasm:vendor"]
+description = "Copy built WASM artifacts into Phoenix assets & priv"
+run = "bin/build_wasm.sh --skip-build"
+
+[tasks."wasm"]
+description = "Build WASM and vendor into Phoenix app"
+run = "bin/build_wasm.sh"
+
 # ── Assets ───────────────────────────────────────────────────────
 
 [tasks."assets:setup"]

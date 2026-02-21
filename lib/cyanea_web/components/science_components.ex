@@ -266,6 +266,144 @@ defmodule CyaneaWeb.ScienceComponents do
   end
 
   # ---------------------------------------------------------------------------
+  # sequence_viewer
+  # ---------------------------------------------------------------------------
+
+  @doc """
+  Renders an interactive WASM-powered sequence viewer.
+
+  Uses the `SequenceViewer` LiveView hook to color-code nucleotides,
+  compute GC%, and provide analysis actions (reverse complement, translate).
+
+  ## Examples
+
+      <.sequence_viewer id="seq-1" sequence="ATCGATCGATCG" />
+      <.sequence_viewer id="seq-2" sequence={@fasta_content} label="Gene X" />
+  """
+  attr :id, :string, required: true
+  attr :sequence, :string, required: true
+  attr :label, :string, default: nil
+  attr :class, :string, default: nil
+
+  def sequence_viewer(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      phx-hook="SequenceViewer"
+      data-sequence={@sequence}
+      data-label={@label}
+      class={@class}
+    >
+      <div class="animate-pulse rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+        <div class="space-y-3">
+          <div class="flex gap-4">
+            <div class="h-4 w-16 rounded bg-slate-200 dark:bg-slate-700"></div>
+            <div class="h-4 w-20 rounded bg-slate-200 dark:bg-slate-700"></div>
+            <div class="h-4 w-12 rounded bg-slate-200 dark:bg-slate-700"></div>
+          </div>
+          <div class="h-4 w-full rounded bg-slate-200 dark:bg-slate-700"></div>
+          <div class="h-4 w-full rounded bg-slate-200 dark:bg-slate-700"></div>
+          <div class="h-4 w-3/4 rounded bg-slate-200 dark:bg-slate-700"></div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # ---------------------------------------------------------------------------
+  # alignment_viewer
+  # ---------------------------------------------------------------------------
+
+  @doc """
+  Renders an interactive WASM-powered alignment viewer.
+
+  Can run alignments client-side via WASM or display pre-computed results.
+
+  ## Examples
+
+      <.alignment_viewer id="aln-1" query="ACGT" target="ACGGT" />
+      <.alignment_viewer id="aln-2" result={@alignment_result} />
+  """
+  attr :id, :string, required: true
+  attr :query, :string, default: nil
+  attr :target, :string, default: nil
+  attr :mode, :string, default: "global"
+  attr :result, :map, default: nil
+  attr :class, :string, default: nil
+
+  def alignment_viewer(assigns) do
+    result_json = if assigns.result, do: Jason.encode!(assigns.result), else: nil
+    assigns = assign(assigns, :result_json, result_json)
+
+    ~H"""
+    <div
+      id={@id}
+      phx-hook="AlignmentViewer"
+      data-query={@query}
+      data-target={@target}
+      data-mode={@mode}
+      data-result={@result_json}
+      class={@class}
+    >
+      <div class="animate-pulse rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+        <div class="space-y-3">
+          <div class="flex gap-4">
+            <div class="h-4 w-14 rounded bg-slate-200 dark:bg-slate-700"></div>
+            <div class="h-4 w-20 rounded bg-slate-200 dark:bg-slate-700"></div>
+          </div>
+          <div class="h-4 w-full rounded bg-slate-200 dark:bg-slate-700"></div>
+          <div class="h-4 w-full rounded bg-slate-200 dark:bg-slate-700"></div>
+          <div class="h-4 w-full rounded bg-slate-200 dark:bg-slate-700"></div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # ---------------------------------------------------------------------------
+  # tree_viewer
+  # ---------------------------------------------------------------------------
+
+  @doc """
+  Renders an interactive WASM-powered phylogenetic tree viewer.
+
+  Parses Newick format and renders a rectangular phylogram as SVG.
+
+  ## Examples
+
+      <.tree_viewer id="tree-1" newick="((A:0.1,B:0.2):0.3,C:0.4);" />
+      <.tree_viewer id="tree-2" newick={@newick_data} width={800} height={600} />
+  """
+  attr :id, :string, required: true
+  attr :newick, :string, required: true
+  attr :width, :integer, default: 600
+  attr :height, :integer, default: 400
+  attr :class, :string, default: nil
+
+  def tree_viewer(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      phx-hook="TreeViewer"
+      data-newick={@newick}
+      data-width={@width}
+      data-height={@height}
+      class={@class}
+    >
+      <div class="animate-pulse rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+        <div class="space-y-3">
+          <div class="flex gap-4">
+            <div class="h-4 w-16 rounded bg-slate-200 dark:bg-slate-700"></div>
+            <div class="h-4 w-20 rounded bg-slate-200 dark:bg-slate-700"></div>
+          </div>
+          <div class="h-32 w-full rounded bg-slate-200 dark:bg-slate-700"></div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # ---------------------------------------------------------------------------
   # Private icon helper
   # ---------------------------------------------------------------------------
 

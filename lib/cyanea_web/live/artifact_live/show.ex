@@ -4,6 +4,12 @@ defmodule CyaneaWeb.ArtifactLive.Show do
   alias Cyanea.Repositories
   alias Cyanea.Artifacts
 
+  import CyaneaWeb.ScienceComponents
+
+  @sequence_exts ~w(.fa .fasta .fna .faa .ffn)
+  @tree_exts ~w(.nwk .newick .tree)
+  @alignment_exts ~w(.aln .clustal .phy)
+
   @impl true
   def mount(
         %{"username" => owner_name, "slug" => repo_slug, "artifact_slug" => artifact_slug},
@@ -39,6 +45,8 @@ defmodule CyaneaWeb.ArtifactLive.Show do
           lineage = Artifacts.lineage(artifact)
           is_owner = current_user && repo.owner_id == current_user.id
 
+          preview = detect_preview(artifact_files)
+
           {:ok,
            assign(socket,
              page_title: artifact.name,
@@ -50,7 +58,9 @@ defmodule CyaneaWeb.ArtifactLive.Show do
              derived: derived,
              lineage: lineage,
              is_owner: is_owner,
-             active_tab: "overview"
+             active_tab: "overview",
+             preview_format: preview.format,
+             preview_content: preview.content
            )}
         else
           {:ok,
@@ -64,6 +74,23 @@ defmodule CyaneaWeb.ArtifactLive.Show do
   @impl true
   def handle_event("switch-tab", %{"tab" => tab}, socket) do
     {:noreply, assign(socket, active_tab: tab)}
+  end
+
+  def handle_event("reverse-complement", %{"sequence" => _seq}, socket) do
+    # Result is computed client-side via WASM; this is a hook for server-side tracking
+    {:noreply, socket}
+  end
+
+  def handle_event("translate", %{"sequence" => _seq}, socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("find-orfs", %{"sequence" => _seq}, socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("alignment-complete", _params, socket) do
+    {:noreply, socket}
   end
 
   @impl true
@@ -131,6 +158,9 @@ defmodule CyaneaWeb.ArtifactLive.Show do
           <:tab active={@active_tab == "overview"} click="switch-tab" value="overview">
             Overview
           </:tab>
+          <:tab :if={@preview_format} active={@active_tab == "preview"} click="switch-tab" value="preview">
+            Preview
+          </:tab>
           <:tab active={@active_tab == "files"} click="switch-tab" value="files" count={length(@artifact_files)}>
             Files
           </:tab>
@@ -151,6 +181,14 @@ defmodule CyaneaWeb.ArtifactLive.Show do
             derived={@derived}
             owner_name={@owner_name}
             repo={@repo}
+          />
+        </div>
+
+        <div :if={@active_tab == "preview"}>
+          <.render_preview
+            preview_format={@preview_format}
+            preview_content={@preview_content}
+            artifact={@artifact}
           />
         </div>
 
@@ -338,6 +376,82 @@ defmodule CyaneaWeb.ArtifactLive.Show do
       </div>
     </.card>
     """
+  end
+
+  # ---------------------------------------------------------------------------
+  # Preview tab
+  # ---------------------------------------------------------------------------
+
+  defp render_preview(assigns) do
+    ~H"""
+    <div>
+      <%= case @preview_format do %>
+        <% :sequence -> %>
+          <.sequence_viewer
+            id={"preview-seq-#{@artifact.id}"}
+            sequence={@preview_content}
+            label={@artifact.name}
+          />
+        <% :tree -> %>
+          <.tree_viewer
+            id={"preview-tree-#{@artifact.id}"}
+            newick={@preview_content}
+            width={700}
+            height={500}
+          />
+        <% :alignment -> %>
+          <.card>
+            <.sequence_display sequence={@preview_content} format={:plain} />
+          </.card>
+        <% _ -> %>
+          <.card>
+            <.sequence_display sequence={@preview_content} format={:plain} />
+          </.card>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp detect_preview(artifact_files) do
+    previewable =
+      Enum.find(artifact_files, fn af ->
+        ext = af.path |> Path.extname() |> String.downcase()
+        ext in @sequence_exts ++ @tree_exts ++ @alignment_exts
+      end)
+
+    case previewable do
+      nil ->
+        %{format: nil, content: nil}
+
+      af ->
+        ext = af.path |> Path.extname() |> String.downcase()
+        format = classify_extension(ext)
+        content = extract_preview_content(af)
+        %{format: format, content: content}
+    end
+  end
+
+  defp classify_extension(ext) when ext in @sequence_exts, do: :sequence
+  defp classify_extension(ext) when ext in @tree_exts, do: :tree
+  defp classify_extension(ext) when ext in @alignment_exts, do: :alignment
+  defp classify_extension(_ext), do: :text
+
+  defp extract_preview_content(artifact_file) do
+    file = artifact_file.file
+    metadata = (file && is_map(file.metadata) && file.metadata) || %{}
+
+    cond do
+      Map.has_key?(metadata, "content") ->
+        metadata["content"]
+
+      Map.has_key?(metadata, "inline_content") ->
+        metadata["inline_content"]
+
+      true ->
+        # File content would be loaded from storage in production.
+        # For now, return a placeholder indicating file needs to be fetched.
+        "; File: #{artifact_file.path} — preview requires file content loading"
+    end
   end
 
   # ---------------------------------------------------------------------------

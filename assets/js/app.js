@@ -4,81 +4,9 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
+import {Hooks} from "./hooks/index.js"
 
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
-
-// Hooks
-let Hooks = {}
-
-// Command palette keyboard shortcut
-Hooks.CommandPalette = {
-  mounted() {
-    document.addEventListener("keydown", (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault()
-        this.pushEvent("open-command-palette", {})
-      }
-    })
-  }
-}
-
-// Dark mode toggle
-Hooks.DarkMode = {
-  mounted() {
-    const darkModeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
-    const savedTheme = localStorage.getItem("theme")
-
-    const setTheme = (theme) => {
-      if (theme === "dark") {
-        document.documentElement.classList.add("dark")
-      } else {
-        document.documentElement.classList.remove("dark")
-      }
-    }
-
-    if (savedTheme) {
-      setTheme(savedTheme)
-    } else if (darkModeMediaQuery.matches) {
-      setTheme("dark")
-    }
-
-    this.handleEvent("toggle-dark-mode", () => {
-      const isDark = document.documentElement.classList.toggle("dark")
-      localStorage.setItem("theme", isDark ? "dark" : "light")
-    })
-  }
-}
-
-// Copy to clipboard
-Hooks.CopyToClipboard = {
-  mounted() {
-    this.el.addEventListener("click", () => {
-      const text = this.el.dataset.copyText
-      navigator.clipboard.writeText(text).then(() => {
-        this.el.dataset.copied = "true"
-        setTimeout(() => { this.el.dataset.copied = "false" }, 2000)
-      })
-    })
-  }
-}
-
-// File upload with progress
-Hooks.FileUpload = {
-  mounted() {
-    this.el.addEventListener("change", (e) => {
-      const files = e.target.files
-      if (files.length > 0) {
-        this.pushEvent("files-selected", {
-          files: Array.from(files).map(f => ({
-            name: f.name,
-            size: f.size,
-            type: f.type
-          }))
-        })
-      }
-    })
-  }
-}
 
 let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
@@ -99,3 +27,11 @@ liveSocket.connect()
 // >> liveSocket.enableLatencySim(1000)  // enabled for duration of browser session
 // >> liveSocket.disableLatencySim()
 window.liveSocket = liveSocket
+
+// Expose WASM API on window for interactive testing in the browser console:
+// >> await cyanea.ready
+// >> cyanea.Seq.gcContent("ATGCGCTA")
+// >> cyanea.Align.alignDna("ACGT", "ACTT", "global")
+// >> cyanea.Phylo.newickInfo("((A:0.1,B:0.2):0.3,C:0.4);")
+import {loadWasm, Seq, Align, Phylo, Stats, ML, Chem, StructBio, IO, Omics, Core} from "./wasm.js"
+window.cyanea = { ready: loadWasm(), Seq, Align, Phylo, Stats, ML, Chem, StructBio, IO, Omics, Core }
