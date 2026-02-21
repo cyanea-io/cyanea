@@ -17,6 +17,14 @@ defmodule CyaneaWeb.Router do
     plug :accepts, ["json"]
   end
 
+  # Health checks (no auth, no session)
+  scope "/", CyaneaWeb do
+    pipe_through :api
+
+    get "/health", HealthController, :live
+    get "/ready", HealthController, :ready
+  end
+
   # Session controller routes (must be outside LiveView scopes)
   scope "/auth", CyaneaWeb do
     pipe_through :browser

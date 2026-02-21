@@ -1,0 +1,36 @@
+# Dependencies and build artifacts
+_build/
+deps/
+node_modules/
+
+# Generated files
+priv/static/assets/
+priv/static/cache_manifest.json
+
+# Dev and test
+.elixir_ls/
+.git/
+.github/
+cover/
+doc/
+test/
+
+# Docker
+Dockerfile*
+docker-compose.yml
+.dockerignore
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env*
+*.secret
