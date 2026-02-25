@@ -1,925 +1,874 @@
-# Cyanea Roadmap
+# Cyanea Platform Roadmap
 
-> From zero to the best Rust bioinformatics ecosystem + federated "GitHub for Life Sciences"
-
----
-
-## Philosophy
-
-1. **Foundations first** — Build world-class Rust libraries before/alongside the platform
-2. **Federation first** — Build the distributed architecture early, not as an afterthought
-3. **Artifacts over files** — Typed, versioned scientific objects with lineage
-4. **Prove the loop** — MVP must demonstrate: create → publish → discover → derive → credit
-5. **Community is the moat** — Social mechanics and trust are as important as features
-6. **Ship early, iterate fast** — Get feedback from real users
+> Federated "Hugging Face + GitHub for Life Sciences"
 
 ---
 
-## Two Tracks
+## Vision
 
-Cyanea development runs on **two parallel tracks**:
+Cyanea is a platform where scientists share, version, discover, and collaborate on research artifacts — **Spaces, Notebooks, Protocols, and Datasets** — with the same ease that developers use GitHub for code. Open by default, private with a Pro license, and federation-ready from day one.
+
+### Core Principles
+
+1. **Scientists, not developers** — No git commands, no merge conflicts, no terminal required
+2. **Open by default** — All content is public unless a Pro license enables private visibility
+3. **Spaces are the unit** — Everything lives inside a Space; Spaces are owned by users or orgs
+4. **Versioning without git** — Append-only revision history with content-addressed snapshots
+5. **Datasets scale separately** — Large data lives in object storage (S3), metadata in Postgres
+6. **Federation is built-in** — Nodes can operate standalone or publish to the network
+7. **Beautiful and intuitive** — Scientists deserve tools as polished as the best consumer products
+
+---
+
+## What We're Building
+
+### Spaces (the top-level container)
+
+A **Space** is the fundamental organizational unit — similar to a GitHub repository but designed for research. Every Space belongs to either a **user** or an **organization**.
+
+A Space contains:
+- **Notebooks** — Rich documents mixing prose, code, and visualizations (like Jupyter/LiveBook)
+- **Protocols** — Versioned experimental procedures (wet lab or computational)
+- **Datasets** — References to or hosting of research data collections
+- **Files** — Any supporting files (images, configs, scripts, etc.)
+
+Spaces have:
+- A landing page (README-like card)
+- Visibility: **public** (default, free) or **private** (Pro license required)
+- License (CC BY 4.0, MIT, Apache 2.0, etc.)
+- Tags and ontology terms for discovery
+- A full revision history (every save is an immutable snapshot)
+- A URL pattern: `cyanea.bio/:owner/:space-slug`
+
+### Users and Organizations
+
+- **Users** authenticate via ORCID (researcher identity) or email/password
+- Users have profiles with bio, affiliation, ORCID link, avatar
+- **Organizations** represent labs, institutions, or teams
+- Org membership has roles: owner, admin, member, viewer
+- Both users and orgs can own Spaces
+- URL: `cyanea.bio/:username` or `cyanea.bio/:org-slug`
+
+### Pro Tier
+
+- **Free**: Unlimited public Spaces, unlimited collaborators
+- **Pro** (user or org): Private Spaces, private Datasets, priority support
+- Without Pro, all content is open and must carry a license
+- Pro is the only monetization lever — no feature gating beyond visibility
+
+---
+
+## Architecture
+
+### Content Model
 
 ```
-                    2026                           2027                    2028
-         Q1    Q2    Q3    Q4    Q1    Q2    Q3    Q4    Q1
-         ├─────┼─────┼─────┼─────┼─────┼─────┼─────┼─────┤
-LABS     │████████████████████████│     │     │     │     │  ← ALL COMPLETE (Q1 2026)
-         │ 13 crates, 659+ tests │ GPU │     │     │     │  ← GPU backends pending HW
-         ├─────┼─────┼─────┼─────┼─────┼─────┼─────┼─────┤
-PLATFORM │ P0  │ P1  │ P2  │ P3  │ P4  │ P5  │ P6  │ P7  │  ← Elixir/Phoenix
-         │found│ mvp │ fed │comm │life │repro│integ│scale│
-         └─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘
+User / Organization
+└── Space (visibility: public | private)
+    ├── Notebooks[]     — Rich documents (prose + code + viz)
+    ├── Protocols[]     — Versioned experimental procedures
+    ├── Datasets[]      — Data collections (metadata + blob refs)
+    ├── Files[]         — Supporting files (images, scripts, etc.)
+    └── RevisionHistory — Append-only snapshots of space state
 ```
 
-**Labs status:** All 13 crates are fully implemented ahead of schedule. Remaining work is CUDA/Metal GPU backends (need hardware SDKs), SIMD vectorization (need profiling), and publishing to crates.io/npm/PyPI. Platform development can now consume Labs directly.
+### Versioning Model: Content-Addressed Snapshots
+
+**No git. No branches. No merge conflicts.** Instead:
+
+1. Every **save** creates an immutable **Revision** (a snapshot of the Space state)
+2. Each Revision is content-addressed (SHA-256 of the serialized state)
+3. Revisions form a linear, append-only chain (like Conflux's operation log)
+4. Users can browse history, compare revisions, and restore to any point
+5. Each Revision records: author, timestamp, summary (auto or user-provided), content hash
+6. **Forking** a Space creates a new Space with a `forked_from` pointer (lineage, not branches)
+
+```
+Revision chain (linear, append-only):
+  R1 ──→ R2 ──→ R3 ──→ R4 ──→ R5 (current)
+  │       │       │       │       │
+  hash1   hash2   hash3   hash4   hash5
+
+Fork creates a new Space:
+  Original: R1 → R2 → R3 → R4 → R5
+                                  │
+  Fork:                           └──→ F1 → F2 → F3
+  (forked_from: original@R5)
+```
+
+**Why this scales:**
+- No merge conflicts (linear history)
+- Content deduplication via SHA-256 (same blob = same hash = stored once)
+- Revision metadata is tiny (Postgres); blob content is in S3
+- Can evolve toward CRDT-based collaborative editing later without changing the storage model
+- Federation is simple: sync revision chains between nodes
+
+### Storage Architecture
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                     PostgreSQL                            │
+│                                                          │
+│  users, orgs, memberships, spaces, notebooks, protocols  │
+│  datasets (metadata), revisions, stars, discussions       │
+│  tags, licenses, federation_nodes, manifests              │
+│                                                          │
+│  Everything except file content lives here               │
+└──────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌──────────────────────────────────────────────────────────┐
+│              S3-Compatible Object Storage                 │
+│              (MinIO / AWS S3 / Cloudflare R2)            │
+│                                                          │
+│  Content-addressed blobs:                                │
+│    blobs/{sha256-prefix}/{sha256}                        │
+│                                                          │
+│  Dataset files, notebook attachments, protocol assets,   │
+│  uploaded images, any file > 0 bytes                     │
+│                                                          │
+│  Deduplicated: same content = same hash = stored once    │
+└──────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌──────────────────────────────────────────────────────────┐
+│                    Meilisearch                            │
+│                                                          │
+│  Full-text search across:                                │
+│    spaces, notebooks, protocols, datasets, users, orgs   │
+│                                                          │
+│  Faceted filtering by tags, organism, assay type, etc.   │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Dataset Storage Strategy
+
+Datasets are the largest content type and need special handling:
+
+1. **Metadata** lives in Postgres (name, description, schema, column info, tags, license, stats)
+2. **Files** live in S3, content-addressed by SHA-256
+3. **External references** supported — a Dataset can point to data hosted elsewhere (e.g., an S3 bucket, a public URL, an FTP server, another Cyanea node) without Cyanea storing the actual bytes
+4. **Chunked uploads** for large files (multipart upload to S3)
+5. **Streaming downloads** via presigned URLs (never proxy through the app server)
+6. **Preview** — first N rows / summary statistics stored as metadata for instant rendering
+
+### Background Processing (Oban)
+
+| Queue | Purpose | Concurrency |
+|-------|---------|-------------|
+| `default` | Notifications, webhooks, emails | 10 |
+| `uploads` | File processing, SHA-256 hashing, S3 upload, metadata extraction | 5 |
+| `indexing` | Meilisearch indexing, dataset stats computation | 5 |
+| `federation` | Sync, publish, mirror operations | 5 |
+| `exports` | Dataset exports, DOI minting, zip generation | 2 |
 
 ---
 
-# LABS TRACK: Rust Bioinformatics Ecosystem
+## Data Model
 
-> Goal: Build the best open-source Rust libraries for life sciences by 2027
+### Core Entities
 
----
+```
+User
+├── id (UUID)
+├── email, username, display_name
+├── orcid_id (optional)
+├── password_hash
+├── bio, affiliation, avatar_url, website
+├── plan (free | pro)
+├── confirmed_at
+└── timestamps
 
-## Labs 0: Core Foundation (Q1 2026) — COMPLETE
+Organization
+├── id (UUID)
+├── name, slug (unique)
+├── description, avatar_url, website, location
+├── plan (free | pro)
+├── verified (institution verification)
+└── timestamps
 
-**Goal:** Shared primitives and infrastructure
+Membership
+├── user_id → User
+├── organization_id → Organization
+├── role (owner | admin | member | viewer)
+└── timestamps
 
-### cyanea-core
+Space
+├── id (UUID)
+├── name, slug
+├── description
+├── visibility (public | private)
+├── license (spdx identifier)
+├── tags[] (text array)
+├── owner_type + owner_id (polymorphic: User or Organization)
+├── forked_from_id → Space (nullable, for forks)
+├── fork_count, star_count (counter cache)
+├── current_revision_id → Revision
+├── global_id (federation URI)
+└── timestamps
 
-- [x] Workspace setup (Cargo workspace, 13 crates)
-- [x] Common traits (`Sequence`, `ContentAddressable`, `Compressible`, `Summarizable`)
-- [x] Error types with rich context (`thiserror` 2.x, `CyaneaError` enum)
-- [x] Content addressing primitives (SHA-256)
-- [x] Memory-mapped file utilities (std feature)
-- [x] Compression support (zstd, gzip via flate2)
-- [ ] Benchmarking infrastructure (criterion)
-- [ ] Fuzzing setup (cargo-fuzz)
+Revision
+├── id (UUID)
+├── space_id → Space
+├── parent_revision_id → Revision (nullable, first revision has none)
+├── content_hash (SHA-256 of serialized state)
+├── summary (user-provided or auto-generated)
+├── author_id → User
+├── number (sequential within space, for display: "v12")
+└── created_at (immutable)
 
-### cyanea-io
+Notebook
+├── id (UUID)
+├── space_id → Space
+├── title, slug
+├── content (JSONB — cell array: markdown, code, output)
+├── position (ordering within space)
+└── timestamps
 
-- [x] CSV parsing with metadata extraction
-- [x] VCF variant parsing (vcf feature)
-- [x] BED interval parsing (bed feature)
-- [x] GFF3 hierarchical gene parsing (gff feature)
-- [x] Feature-gated parsers for minimal dependency tree
+Protocol
+├── id (UUID)
+├── space_id → Space
+├── title, slug
+├── description
+├── content (JSONB — structured steps, materials, equipment)
+├── version (semver string)
+├── position (ordering within space)
+└── timestamps
 
----
+Dataset
+├── id (UUID)
+├── space_id → Space
+├── name, slug
+├── description
+├── storage_type (hosted | external)
+├── external_url (for external datasets)
+├── metadata (JSONB — schema, column info, row count, size, stats)
+├── tags[]
+├── position (ordering within space)
+└── timestamps
 
-## Labs 1: Sequences (Q2 2026) — COMPLETE
+DatasetFile (join: Dataset ↔ Blob)
+├── dataset_id → Dataset
+├── blob_id → Blob
+├── path (file path within dataset)
+├── size
+└── timestamps
 
-**Goal:** Best-in-class sequence handling
+Blob (content-addressed, deduplicated)
+├── id (UUID)
+├── sha256 (unique)
+├── size
+├── mime_type
+├── s3_key
+└── created_at
 
-### cyanea-seq
+SpaceFile (files directly in a Space, not in a Dataset)
+├── id (UUID)
+├── space_id → Space
+├── blob_id → Blob
+├── path
+├── name
+└── timestamps
 
-- [x] **Parsers** — FASTA/FASTQ streaming via needletail
-- [x] **Sequence types** — DNA, RNA, Protein with IUPAC alphabet validation
-- [x] **Operations** — Reverse complement, translation (NCBI Table 1), k-mer iteration, GC content
-- [x] **Quality** — Phred score handling (Phred33/64), mean quality, Q20/Q30 fractions
-- [ ] **Indexing** — Suffix arrays, FM-index (deferred)
-- [ ] **Compression** — 2-bit encoding (deferred)
+Star
+├── user_id → User
+├── space_id → Space
+├── unique(user_id, space_id)
+└── created_at
 
-### cyanea-py (Python bindings)
+Discussion
+├── id (UUID)
+├── space_id → Space
+├── author_id → User
+├── title
+├── body (markdown)
+├── status (open | closed)
+└── timestamps
 
-- [x] PyO3 bindings for sequence types (DnaSequence, RnaSequence, ProteinSequence)
-- [x] FASTA/FASTQ parsing functions
-- [x] Alignment, stats, core utils, ML distance submodules
-- [x] maturin packaging
+Comment
+├── id (UUID)
+├── discussion_id → Discussion
+├── author_id → User
+├── body (markdown)
+├── parent_comment_id → Comment (nullable, for threading)
+└── timestamps
 
----
+ActivityEvent (append-only feed)
+├── id (UUID)
+├── actor_id → User
+├── action (created_space | forked_space | starred | published_dataset | ...)
+├── subject_type + subject_id (polymorphic)
+├── metadata (JSONB)
+└── created_at
 
-## Labs 2: Alignment (Q3 2026) — COMPLETE
+FederationNode (existing, keep as-is)
+Manifest (existing, keep as-is — adapted to reference Spaces instead of Artifacts)
+SyncEntry (existing, keep as-is)
+```
 
-**Goal:** Fast, accurate sequence alignment (CPU + GPU)
+### Key Design Decisions
 
-### cyanea-align
+**Polymorphic ownership:** `Space.owner_type` + `Space.owner_id` replaces the XOR constraint on `owner_id` / `organization_id`. Simpler queries, same semantics.
 
-- [x] **Pairwise alignment** — Smith-Waterman (local), Needleman-Wunsch (global), semi-global; all with Gotoh 3-matrix affine gaps
-- [x] **Scoring** — BLOSUM (45, 62, 80), PAM250, custom DNA/RNA matrices
-- [x] **Banded alignment** — Banded NW, SW, and semi-global with configurable bandwidth; score-only mode
-- [x] **MSA** — ClustalW-style progressive multiple sequence alignment
-- [x] **Batch** — Batch pairwise alignment for all modes
-- [x] **GPU dispatch** — GPU batch alignment with CPU fallback (CUDA/Metal backends gated)
-- [x] **CIGAR** — Compact CIGAR string generation, identity/matches/gaps metrics
-- [ ] **SIMD acceleration** — True vectorization deferred (scalar banded serves as baseline)
-- [ ] **Heuristic alignment** — Seed-and-extend, minimizer seeding (deferred)
+**JSONB for structured content:** Notebook cells, Protocol steps, and Dataset metadata use JSONB columns. This avoids premature schema rigidity while keeping everything in Postgres for transactional consistency. We can add dedicated tables later if query patterns demand it.
 
----
+**Blobs are deduplicated:** The `Blob` table is keyed by SHA-256. When a file is uploaded, we compute its hash; if a Blob with that hash exists, we reuse it. This is critical for forked Spaces and shared datasets.
 
-## Labs 3: Omics Data Structures (Q4 2026) — COMPLETE
+**Counter caches:** `star_count` and `fork_count` on Space avoid COUNT queries. Updated via Ecto.Multi in the star/fork operations.
 
-**Goal:** Efficient data structures for omics data
-
-### cyanea-omics
-
-- [x] **Expression matrices** — Dense and COO sparse matrices with named rows/columns
-- [x] **Genomic ranges** — GenomicPosition, GenomicInterval (0-based half-open), IntervalSet with overlap/merge/coverage
-- [x] **Annotations** — Gene/Transcript/Exon hierarchy, GeneType classification
-- [x] **Variants** — VCF-style Variant type, VariantType/Zygosity/Filter enums
-- [x] **Single-cell** — AnnData-like container (obs, var, X, layers, obsm, varm, QC metrics)
-
-### cyanea-io (format parsers)
-
-- [x] CSV metadata extraction and preview
-- [x] VCF variant parsing into cyanea-omics types
-- [x] BED interval parsing (BED3-BED6)
-- [x] GFF3 hierarchical gene parsing with coordinate conversion
-- [ ] SAM/BAM/CRAM, Parquet, HDF5/Zarr (deferred)
-
----
-
-## Labs 4: GPU Acceleration (Q1 2027) — PARTIAL (CPU Backend Complete)
-
-**Goal:** First-class GPU support for compute-heavy operations
-
-### cyanea-gpu
-
-- [x] **Abstraction layer** — `Backend` trait (Send + Sync), `DeviceInfo`, `Buffer` type, `auto_backend()`
-- [x] **CPU backend** — Full reference implementation (reductions, elementwise, matrix multiply, pairwise distances, batch z-score)
-- [x] **Operations** — `reduce_sum/min/max/mean`, `elementwise_map`, `pairwise_distance_matrix`, `matrix_multiply`, `batch_pairwise`, `batch_z_score`
-- [ ] **CUDA backend** — Feature-gated stub (requires CUDA SDK)
-- [ ] **Metal backend** — Feature-gated stub (requires Metal SDK)
-
-### cyanea-align (GPU dispatch)
-
-- [x] `align_batch_gpu()` with `GpuBackend` enum (Auto/Cuda/Metal/Cpu)
-- [x] CPU fallback always available
-- [ ] Actual CUDA/Metal kernels (deferred, need hardware SDKs)
-
----
-
-## Labs 5: WASM & Browser (Q2 2027) — COMPLETE (Bindings Ready)
-
-**Goal:** Run bioinformatics in the browser
-
-### cyanea-wasm
-
-- [x] **JSON-based API** — All functions accept/return JSON strings for maximum JS interop
-- [x] **wasm-bindgen** — All public functions annotated with `#[cfg_attr(feature = "wasm", wasm_bindgen)]`
-- [x] **Sequence module** — FASTA/FASTQ parsing, GC content, reverse complement, transcribe, translate, validate
-- [x] **Alignment module** — DNA/protein alignment (all modes), batch alignment, custom scoring
-- [x] **Statistics module** — Descriptive stats, Pearson/Spearman, t-tests, Mann-Whitney, BH/Bonferroni correction
-- [x] **ML module** — K-mer counting, Euclidean/Manhattan/Hamming/cosine distances
-- [x] **Core utils** — SHA-256 hashing, zstd compress/decompress
-- [ ] **npm packages** — Not yet published (@cyanea/*)
-- [ ] **TypeScript type definitions** — Not yet generated
-- [ ] **Web Worker integration** — Not yet built
-
----
-
-## Labs 6: Statistics & ML (Q3 2027) — COMPLETE
-
-**Goal:** Statistical methods and ML primitives for life sciences
-
-### cyanea-stats
-
-- [x] **Descriptive statistics** — mean, median, variance, std_dev, quantiles, IQR, MAD, skewness, kurtosis
-- [x] **Correlation** — Pearson, Spearman, correlation matrices
-- [x] **Hypothesis testing** — One-sample t-test, two-sample t-test (Student's/Welch's), Mann-Whitney U
-- [x] **Distributions** — Normal, Poisson (pdf/cdf), erf, ln_gamma, regularized incomplete beta
-- [x] **Multiple testing correction** — Bonferroni, Benjamini-Hochberg FDR
-- [x] **Dimensionality reduction** — PCA (power iteration)
-- [ ] ANOVA, Chi-square, Fisher's exact (not implemented)
-
-### cyanea-ml
-
-- [x] **Clustering** — K-means, DBSCAN, hierarchical (single/complete/average/Ward linkage)
-- [x] **Distances** — Euclidean, Manhattan, cosine, Hamming; pairwise distance matrices
-- [x] **Encoding** — One-hot and label encoding for DNA/RNA/protein
-- [x] **Embeddings** — K-mer frequency embeddings, composition vectors, batch embedding, pairwise cosine distances
-- [x] **Inference** — KNN (classify/regress), linear regression (normal equation)
-- [x] **Dimensionality reduction** — PCA, t-SNE, and UMAP
-- [x] **Evaluation** — Silhouette score/samples
-- [x] **Normalization** — min-max, z-score, L2 (row-wise and column-wise)
-- [ ] ONNX runtime integration (deferred)
+**Revisions are lightweight:** A Revision is just a pointer (content_hash) + metadata (author, timestamp, summary). The actual state is reconstructable from the current Notebooks, Protocols, Datasets, and Files belonging to the Space. For space-efficient history, revision snapshots store only what changed (delta compression is a future optimization).
 
 ---
 
-## Labs: Domain Crates — COMPLETE
+## Phased Roadmap
 
-### cyanea-struct
+### Current State (What's Already Built)
 
-- [x] PDB parsing (ATOM/HETATM/MODEL/ENDMDL)
-- [x] Structure types (Point3D, Atom, Residue, Chain, Structure)
-- [x] Geometry (distance, angle, dihedral, center of mass, RMSD)
-- [x] Secondary structure assignment (simplified DSSP via phi/psi)
-- [x] Structural superposition (Kabsch algorithm, CA alignment)
-- [x] Contact maps (CA-only and all-atom)
+**Fully implemented:**
+- User authentication (email/password + ORCID OAuth, Guardian JWT)
+- Organization management with role-based access (owner/admin/member/viewer)
+- Repository CRUD with file upload to S3 (to be renamed to Space)
+- Artifact versioning with lineage tracking and event audit trail
+- Federation schema (global IDs, manifests, sync entries)
+- File storage (S3-compatible, content-addressed, presigned URLs)
+- Search integration (Meilisearch with DB fallback)
+- 14 LiveView pages (auth, dashboard, repo, artifact, org, explore, home)
+- 200+ Rust NIF stubs (all documented, SHA-256 hashing active)
+- Oban configured (5 queues, no workers yet)
+- Docker Compose (Postgres, MinIO, Meilisearch)
+- Dockerfile + fly.toml for production deployment
 
-### cyanea-chem
-
-- [x] SMILES parsing (atoms, bonds, branches, rings, aromaticity, charges)
-- [x] SDF/Mol V2000 parsing (single and multi-molecule)
-- [x] Morgan/ECFP circular fingerprints, Tanimoto similarity
-- [x] Molecular properties (weight, formula, HBD/HBA, rotatable bonds, logP)
-- [x] Substructure search (VF2-style matching)
-- [x] Ring detection (internal)
-
-### cyanea-phylo
-
-- [x] Tree types (PhyloTree, Node, pre-order/post-order iterators)
-- [x] Newick I/O (parser + writer)
-- [x] NEXUS I/O (parser + writer)
-- [x] Evolutionary distances (p-distance, Jukes-Cantor, Kimura 2-parameter)
-- [x] Tree comparison (Robinson-Foulds, branch score distance)
-- [x] Tree construction (UPGMA, neighbor-joining)
-- [x] Ancestral reconstruction (Fitch parsimony, Sankoff weighted parsimony, per-site)
+**What needs to change:**
+- Rename "Repository" → "Space" throughout
+- Replace "Artifact" with first-class Notebook, Protocol, Dataset types
+- Replace git-like commit model with append-only revision history
+- Add Pro tier and visibility enforcement
+- Add community features (stars, forks, discussions, activity feed)
+- Build Oban workers for background processing
+- Build the notebook editor UI
 
 ---
 
-# PLATFORM TRACK: Federated R&D Hub
+### Phase 1: Spaces Foundation (v0.1)
 
-> Goal: Build the federated "GitHub for Life Sciences"
+> **Goal:** Replace the Repository/Artifact model with the Space-centric architecture. Get the core CRUD and ownership model working.
 
----
+#### Database Migration
 
-## Platform 0: Foundation (Q1 2026)
+- [ ] Rename `repositories` table → `spaces`
+- [ ] Add `owner_type` column (replace XOR constraint)
+- [ ] Add `forked_from_id`, `fork_count`, `star_count` columns
+- [ ] Add `current_revision_id` column
+- [ ] Add `global_id` column
+- [ ] Create `revisions` table (id, space_id, parent_revision_id, content_hash, summary, author_id, number, created_at)
+- [ ] Create `notebooks` table (id, space_id, title, slug, content JSONB, position)
+- [ ] Create `protocols` table (id, space_id, title, slug, description, content JSONB, version, position)
+- [ ] Create `datasets` table (id, space_id, name, slug, description, storage_type, external_url, metadata JSONB, tags[], position)
+- [ ] Create `dataset_files` join table
+- [ ] Create `blobs` table (id, sha256 unique, size, mime_type, s3_key)
+- [ ] Create `space_files` table (direct file attachments)
+- [ ] Create `stars` table (user_id, space_id, unique)
+- [ ] Drop or migrate `repositories`, `commits`, `artifacts`, `artifact_events`, `artifact_files` tables
 
-**Goal:** Scaffolding and core infrastructure
+#### Contexts
 
-### Completed
+- [ ] `Spaces` context — CRUD, visibility filtering, ownership checks, fork, slug generation
+- [ ] `Notebooks` context — CRUD within a Space, cell manipulation, ordering
+- [ ] `Protocols` context — CRUD, versioning (semver bump), fork/adapt
+- [ ] `Datasets` context — CRUD, hosted vs external, metadata management
+- [ ] `Blobs` context — Content-addressed upload, deduplication, presigned URLs
+- [ ] `Revisions` context — Create snapshot, list history, compare, restore
+- [ ] `Stars` context — Star/unstar, list starred, count
+- [ ] Update `Search` context for new entity types
+- [ ] Update `Federation` context for Spaces (global IDs, manifests)
 
-- [x] Project structure (Phoenix + Rust NIFs)
-- [x] Docker Compose (Postgres, MinIO, Meilisearch)
-- [x] Configuration (dev/test/prod)
-- [x] Rust NIFs skeleton (wraps cyanea-* crates)
+#### LiveViews
 
-### In Progress
+- [ ] `SpaceLive.Show` — Space landing page (README card, notebooks/protocols/datasets listing, file browser, star button, fork button)
+- [ ] `SpaceLive.New` — Create Space form (name, slug, description, visibility, license, owner picker for orgs)
+- [ ] `SpaceLive.Settings` — Edit Space metadata, transfer ownership, delete, visibility toggle (Pro gate)
+- [ ] `DashboardLive` — Updated for Spaces (user's spaces + starred + org spaces)
+- [ ] `ExploreLive` — Updated for Spaces, faceted search
+- [ ] `UserLive.Show` — Updated profile (spaces, stars, activity)
+- [ ] Rename all route paths from `/:username/:repo-slug` → `/:owner/:space-slug`
 
-- [ ] Database migrations for new data model
-  - [ ] Users, Organizations, Memberships
-  - [ ] Projects (replacing Repositories)
-  - [ ] Artifacts (typed: dataset, protocol, notebook, etc.)
-  - [ ] ArtifactEvents (append-only event log)
-  - [ ] Blobs (content-addressed storage)
-  - [ ] FederationNodes
-- [ ] Basic authentication (email/password)
-- [ ] ORCID OAuth integration
-- [ ] Guardian JWT setup
-- [ ] S3 blob upload/download with content addressing
-- [ ] Basic LiveView layouts
+#### Background Workers (Oban)
 
----
-
-## Platform 1: MVP (v0.1) — Q2 2026
-
-**Goal:** Prove federation + artifact lineage + community sharing
-
-> "Install Cyanea Node in your lab. Keep internal work private. Publish the open parts to the Cyanea Network with one click. Others can fork, reproduce, and credit you."
-
-**Depends on Labs:** cyanea-core, cyanea-seq (for file previews)
-
-### Authentication & Identity
-
-- [ ] Sign up with email/password
-- [ ] Sign in with ORCID
-- [ ] User profile page (name, bio, affiliation, ORCID link)
-- [ ] Profile editing with avatar
-- [ ] Password reset flow
-- [ ] Email verification
-
-### Organizations
-
-- [ ] Create organization
-- [ ] Organization profile page
-- [ ] Invite members via email
-- [ ] Member management (add/remove/change role)
-- [ ] Roles: owner, admin, member, viewer
-- [ ] Organization settings
-- [ ] Verified badge (manual for MVP)
-
-### Projects
-
-- [ ] Create project (name, description, visibility, license)
-- [ ] Project landing page ("card" view)
-- [ ] Project settings (rename, transfer, delete)
-- [ ] Visibility levels: private, internal, public
-- [ ] License picker with common options
-- [ ] Tags and ontology terms (free-form for MVP)
-
-### Artifacts (Core Types)
-
-- [ ] Create artifact (Dataset, Protocol, Notebook)
-- [ ] Artifact card page (metadata, description, files)
-- [ ] Artifact type-specific metadata schemas
-- [ ] File browser within artifact
-- [ ] Upload files to artifact (single and bulk)
-- [ ] Download artifact (zip or individual files)
-- [ ] Content-addressed blob storage (SHA256)
-
-### Versioning & Lineage
-
-- [ ] Immutable artifact versions (content hash)
-- [ ] Version history view
-- [ ] View artifact at specific version
-- [ ] Create derivation ("fork" an artifact)
-- [ ] Lineage graph visualization (parent → child)
-- [ ] "Derived from" attribution on cards
-
-### Basic Federation
-
-- [ ] Global IDs for projects and artifacts (URI scheme)
-- [ ] Node identity and configuration
-- [ ] Publish artifact to hub (push)
-- [ ] Publish project to hub (batch publish)
-- [ ] Federation policy per project (none, selective, full)
-- [ ] Basic manifest format for sync
-
-### Discovery & Search
-
-- [ ] Full-text search across projects/artifacts
-- [ ] Search within project
-- [ ] Filter by artifact type
-- [ ] Filter by tags
-- [ ] Search results with card previews
-
-### Community (Basic)
-
-- [ ] Star projects
-- [ ] Watch projects (notifications placeholder)
-- [ ] User activity feed
-- [ ] Project activity feed
-
-### UI/UX
-
-- [ ] Responsive design (mobile-friendly)
-- [ ] Dark/light theme
-- [ ] Loading states and error handling
-- [ ] Empty states with guidance
-- [ ] Keyboard shortcuts (basic)
+- [ ] `BlobHashWorker` — Compute SHA-256 for uploaded files, deduplicate
+- [ ] `SearchIndexWorker` — Index spaces, notebooks, protocols, datasets in Meilisearch
+- [ ] `RevisionWorker` — Create revision snapshot after save operations
+- [ ] `MetadataExtractionWorker` — Extract dataset stats (row count, columns, preview) from uploaded files via NIFs
 
 ---
 
-## Platform 2: Federation (v0.2) — Q3 2026
+### Phase 2: Content Types (v0.2)
 
-**Goal:** Full federation capabilities between nodes and hub
+> **Goal:** Build the notebook editor, protocol editor, and dataset management UI.
 
-**Depends on Labs:** cyanea-core (content addressing, hashing)
+#### Notebooks
 
-### Sync Protocol
+- [ ] Notebook editor LiveView — Rich cell-based editor
+  - [ ] Markdown cells with live preview
+  - [ ] Code cells with syntax highlighting (Elixir, Python, R, Rust)
+  - [ ] Output cells (text, tables, images — view-only for MVP)
+  - [ ] Cell reordering (drag-and-drop or up/down buttons)
+  - [ ] Cell add/delete
+  - [ ] Auto-save with revision creation
+- [ ] Notebook viewer — Read-only rendered view for public notebooks
+- [ ] Notebook forking — Fork a notebook into your own Space
+- [ ] Export — Download as .ipynb (Jupyter) or .livemd (LiveBook)
 
-- [ ] Incremental sync (delta updates)
-- [ ] Signed manifests (org/node keys)
-- [ ] Conflict detection (immutable artifacts = no conflicts)
-- [ ] Metadata merge strategies
-- [ ] Sync status dashboard
+#### Protocols
 
-### Hub Features
+- [ ] Protocol editor LiveView — Structured editor
+  - [ ] Title, description, version
+  - [ ] Materials section (name, quantity, vendor, catalog number)
+  - [ ] Equipment section (name, settings, calibration notes)
+  - [ ] Steps section (ordered, with timing, temperature, notes, images)
+  - [ ] Tips and troubleshooting section
+- [ ] Protocol viewer — Beautiful rendered view
+- [ ] Protocol versioning — Bump version, view diff between versions
+- [ ] Protocol forking — Fork and adapt, with attribution to original
 
-- [ ] Node registry (who's connected)
-- [ ] Aggregate search across federated content
-- [ ] Global artifact count/stats
-- [ ] Hub admin dashboard
+#### Datasets
 
-### Pull/Mirror
-
-- [ ] Mirror public artifacts from hub to node
-- [ ] Selective mirroring (by project, tag, org)
-- [ ] Cache management for mirrored content
-- [ ] Offline-first with sync on reconnect
-
-### Cross-Node References
-
-- [ ] Reference artifacts from other nodes (X@hash)
-- [ ] Resolve cross-node lineage
-- [ ] Display remote artifact cards (cached metadata)
-- [ ] "View on origin" links
-
-### Federation Policies
-
-- [ ] Per-artifact publish rules
-- [ ] Embargo dates (publish after X)
-- [ ] Retraction workflow
-- [ ] Access request for restricted content
+- [ ] Dataset upload flow
+  - [ ] Drag-and-drop file upload (chunked for large files)
+  - [ ] Multi-file upload (zip or individual)
+  - [ ] Progress indicator with cancel
+  - [ ] Auto-detection of file format (CSV, TSV, FASTA, VCF, BED, etc.)
+- [ ] Dataset metadata editor
+  - [ ] Description, tags, license
+  - [ ] Column descriptions (for tabular data)
+  - [ ] Schema definition (types, constraints)
+  - [ ] Known issues / caveats
+- [ ] Dataset preview
+  - [ ] Tabular preview (first 100 rows, sortable, filterable)
+  - [ ] FASTA/FASTQ preview (sequence stats via NIF)
+  - [ ] VCF preview (variant summary via NIF)
+  - [ ] File listing with sizes and types
+- [ ] External dataset references
+  - [ ] URL-based reference (S3, HTTP, FTP)
+  - [ ] Metadata-only card (no blob storage)
+  - [ ] Availability checking (periodic health check)
+- [ ] Dataset download
+  - [ ] Individual file download (presigned URL)
+  - [ ] Full dataset download (zip generation via Oban)
 
 ---
 
-## Platform 3: Community (v0.3) — Q4 2026
+### Phase 3: Community & Discovery (v0.3)
 
-**Goal:** Social mechanics that make Cyanea feel alive
+> **Goal:** Social mechanics that make the platform feel alive and useful for discovery.
 
-### Discussions & Annotations
+#### Stars & Forks
 
-- [ ] Discussions on projects
-- [ ] Discussions on artifacts
-- [ ] Comments on specific files/lines
-- [ ] Mentions (@username)
-- [ ] Markdown with preview
+- [ ] Star a Space (toggle, counter cache update)
+- [ ] Fork a Space (deep copy: notebooks, protocols, dataset refs, files)
+- [ ] Fork count display
+- [ ] "Forked from" attribution link
+- [ ] List of forks on original Space
+- [ ] Starred Spaces on user profile
 
-### Notifications
+#### Discussions
+
+- [ ] Discussion list on Space page (tab)
+- [ ] Create discussion (title + markdown body)
+- [ ] Threaded comments (one level of nesting)
+- [ ] Markdown with preview and @mentions
+- [ ] Close/reopen discussions
+- [ ] Discussion count badge on Space card
+
+#### Activity Feed
+
+- [ ] Global activity feed on Explore page
+- [ ] Per-Space activity feed (tab)
+- [ ] Per-User activity feed (profile page)
+- [ ] Event types: created_space, forked_space, starred, created_notebook, updated_protocol, published_dataset, commented, etc.
+- [ ] Pagination with infinite scroll
+
+#### Discovery & Search
+
+- [ ] Full-text search across all content types
+- [ ] Faceted filtering: tags, organism, assay type, data modality, license
+- [ ] Trending Spaces (by recent stars)
+- [ ] Recently updated Spaces
+- [ ] Featured/curated collections (admin-managed)
+- [ ] "Similar Spaces" recommendations (tag overlap)
+- [ ] Browse by organism taxonomy
+
+#### Notifications
 
 - [ ] In-app notification center
-- [ ] Email notifications (configurable)
-- [ ] Watch/unwatch granularity
-- [ ] Digest mode (daily/weekly)
+- [ ] Notification types: starred, forked, new discussion, new comment, mention
+- [ ] Read/unread state
+- [ ] Email notifications (configurable per-type)
+- [ ] Watch/unwatch a Space
 
-### Discovery Enhancements
+#### User Profiles
 
-- [ ] Trending projects
-- [ ] Recently updated
-- [ ] Featured/curated collections
-- [ ] "Similar artifacts" recommendations
-- [ ] Browse by organism, assay, modality
-
-### Credits & Attribution
-
-- [ ] Contributors list on artifacts
-- [ ] Maintainer roles
-- [ ] Citation generation (BibTeX, RIS)
-- [ ] "Cite this" button
-- [ ] Derived-from graph explorer
-
-### Cards & Landing Pages
-
-- [ ] Rich artifact cards (auto-generated from metadata)
-- [ ] Custom card sections
-- [ ] Badges (verified, reproducible, has DOI)
-- [ ] Usage statistics on cards
-
-### User Profiles
-
-- [ ] Public profile pages
-- [ ] Publication list (artifacts authored)
-- [ ] Contribution graph
+- [ ] Enhanced public profile page
+- [ ] Contribution graph (activity heatmap)
+- [ ] Pinned Spaces (user-selected highlights)
 - [ ] Following users/orgs
+- [ ] Follower/following counts
 
 ---
 
-## Platform 4: Life Sciences Features (v0.4) — Q1 2027
+### Phase 4: Pro Tier & Billing (v0.4)
 
-**Goal:** Domain-specific functionality for bioinformatics
+> **Goal:** Monetization through private visibility.
 
-**Depends on Labs:** cyanea-seq, cyanea-align, cyanea-omics, cyanea-io
+#### Subscription Model
 
-### File Previews
+- [ ] Pro tier for users ($9/month or $89/year — TBD)
+- [ ] Pro tier for organizations ($25/month per seat or similar — TBD)
+- [ ] Stripe integration (Checkout, Customer Portal, Webhooks)
+- [ ] Plan field on User and Organization schemas
+- [ ] Grace period on downgrade (Spaces become read-only, not deleted)
 
-- [ ] FASTA/FASTQ viewer with stats (via Rust NIF)
-- [ ] CSV/TSV explorer (sort, filter, search)
-- [ ] Image viewer (with zoom, pan, gallery)
-- [ ] PDF viewer
-- [ ] Jupyter notebook renderer
-- [ ] Markdown with LaTeX support
+#### Visibility Enforcement
 
-### Protocol Editor
+- [ ] Private Spaces require Pro plan on owner
+- [ ] Visibility change (public → private) checks Pro status
+- [ ] Downgrade handling: private Spaces become read-only until upgraded or made public
+- [ ] "Upgrade to Pro" prompts in UI when trying to create private Space
 
-- [ ] Structured protocol format (YAML/JSON schema)
-- [ ] Materials list with quantities
-- [ ] Step-by-step procedures
-- [ ] Timing and temperature annotations
-- [ ] Equipment/instrument references
-- [ ] Protocol versioning with diff
-- [ ] Fork/adapt workflow
+#### Storage Quotas
 
-### Dataset Metadata
-
-- [ ] Dataset card schema (inspired by HF)
-- [ ] Column descriptions and types
-- [ ] Data dictionary
-- [ ] Sample/specimen relationships
-- [ ] Quality metrics summary
-- [ ] Known issues/caveats section
-
-### Ontologies & Tagging
-
-- [ ] Tag with Gene Ontology terms
-- [ ] NCBI Taxonomy integration
-- [ ] ChEBI (chemicals)
-- [ ] EFO (experimental factors)
-- [ ] Autocomplete from ontologies
-- [ ] Ontology browser
-
-### Sample Management
-
-- [ ] Sample artifact type
-- [ ] Sample metadata schema
-- [ ] Sample → Dataset relationships
-- [ ] Batch sample import (CSV)
-- [ ] Sample lineage (derived samples)
+- [ ] Free tier: 5 GB storage per user, 10 GB per org
+- [ ] Pro tier: 50 GB per user, 200 GB per org (TBD)
+- [ ] Usage tracking and dashboard
+- [ ] Warning at 80%, block uploads at 100%
 
 ---
 
-## Platform 5: Reproducibility (v0.5) — Q2 2027
+### Phase 5: Federation (v0.5)
 
-**Goal:** Trust through reproducibility and QC
+> **Goal:** Full federation between Cyanea nodes and the public hub.
 
-**Depends on Labs:** cyanea-core (hashing), cyanea-stats (QC)
+#### Publishing
 
-### Pipeline Integration
+- [ ] Publish a Space to the public network (one-click)
+- [ ] Selective publishing (choose which notebooks/protocols/datasets to include)
+- [ ] Unpublish / retract with reason
+- [ ] Federation policy per Space (none | selective | full)
+- [ ] Publishing creates a signed Manifest
 
-- [ ] Pipeline artifact type
-- [ ] Nextflow wrapper support
-- [ ] Snakemake wrapper support
-- [ ] WDL/CWL support (basic)
-- [ ] Container references (Docker/Singularity)
-- [ ] Parameter schemas
+#### Sync Protocol
 
-### Run Records
+- [ ] Incremental revision sync (send new revisions since last sync)
+- [ ] Content-addressed blob sync (only transfer missing blobs)
+- [ ] Manifest exchange for discovery (lightweight metadata)
+- [ ] Sync status dashboard (per-node)
+- [ ] Retry with exponential backoff on failure
 
-- [ ] Record pipeline executions
-- [ ] Capture: inputs, code hash, environment, outputs
-- [ ] Link run → output artifacts
-- [ ] Run comparison view
-- [ ] "Reproduce this" button
+#### Discovery Across Nodes
 
-### QC Gates
+- [ ] Aggregate search across federated content
+- [ ] Display remote Spaces with "View on origin" link
+- [ ] Cross-node fork (fork a Space from another node)
+- [ ] Cross-node lineage display
 
-- [ ] Schema validation for artifacts
-- [ ] Checksum verification on upload
-- [ ] Basic stats checks (row count, null %, etc.)
-- [ ] Custom validation rules (YAML config)
-- [ ] QC badge on artifact cards
+#### Node Administration
 
-### Environment Capture
-
-- [ ] Lockfile detection and storage
-- [ ] Container image references
-- [ ] Runtime environment snapshot
-- [ ] Dependency graph visualization
-
-### Attestations (Optional)
-
-- [ ] Signed artifact manifests
-- [ ] Org key management
-- [ ] Verification UI
-- [ ] Attestation history
-
-### FAIR Compliance
-
-- [ ] FAIR score calculator
-- [ ] Metadata completeness check
-- [ ] Persistent identifiers (DOI via DataCite)
-- [ ] License clarity warnings
-- [ ] FAIR improvement suggestions
+- [ ] Register/deregister federated nodes
+- [ ] Node health monitoring
+- [ ] Sync log and audit trail
+- [ ] Bandwidth and storage metrics per node
 
 ---
 
-## Platform 6: Integrations (v0.6) — Q3 2027
+### Phase 6: Life Sciences Features (v0.6)
 
-**Goal:** Connect to the research ecosystem
+> **Goal:** Domain-specific functionality powered by Cyanea Labs NIFs.
 
-### API
+#### File Previews (NIF-Powered)
 
-- [ ] REST API v1
-- [ ] GraphQL API (optional)
-- [ ] API key management
-- [ ] Rate limiting
-- [ ] Webhooks (artifact events)
-- [ ] OpenAPI documentation
+- [ ] FASTA/FASTQ viewer with stats (sequence count, GC%, quality distribution)
+- [ ] VCF variant browser (summary stats, variant type breakdown)
+- [ ] BED/GFF3 interval viewer (region browser)
+- [ ] CSV/TSV explorer (sort, filter, paginate)
+- [ ] PDB structure viewer (3D via WASM or embedded viewer)
+- [ ] Image viewer (zoom, pan, gallery)
+- [ ] PDF renderer
+- [ ] Markdown with LaTeX (KaTeX)
 
-### CLI
+#### Ontology Integration
 
-- [ ] `cyanea` CLI tool
-- [ ] Login/auth flow
-- [ ] Upload/download artifacts
-- [ ] Clone projects
-- [ ] Publish to hub
-- [ ] Pull/mirror from hub
-- [ ] Git-like UX where sensible
+- [ ] Tag Spaces with Gene Ontology terms
+- [ ] NCBI Taxonomy organism picker
+- [ ] EFO (experimental factors) tagging
+- [ ] Autocomplete from ontology databases
+- [ ] Ontology-aware search filtering
 
-### External Services
+#### Citations & Attribution
 
-- [ ] Zenodo sync (push datasets, get DOI)
-- [ ] GenBank/UniProt linking
-- [ ] PubMed paper linking
-- [ ] ORCID profile sync
-- [ ] GitHub import (repos → projects)
-
-### Identity & Auth
-
-- [ ] SAML SSO (enterprise)
-- [ ] OIDC support
-- [ ] Institutional login (InCommon, eduGAIN)
+- [ ] "Cite this Space" button (BibTeX, RIS, APA)
+- [ ] DOI minting via DataCite (for published Spaces)
+- [ ] Contributors list with ORCID links
+- [ ] "Derived from" lineage graph explorer
+- [ ] FAIR score indicator
 
 ---
 
-## Platform 7: Scale & Performance (v0.7) — Q4 2027
+### Phase 7: Advanced Notebooks (v0.7)
 
-**Goal:** Handle large datasets and many nodes
+> **Goal:** Move from view+edit to interactive execution.
 
-**Depends on Labs:** cyanea-gpu (for compute), cyanea-wasm (for browser tools)
+#### Browser Execution (WASM)
 
-### Storage
+- [ ] Execute code cells client-side via cyanea-wasm
+- [ ] Supported operations: sequence analysis, alignment, statistics, k-mer counting
+- [ ] Output rendering: text, tables, basic charts
+- [ ] Execution state management (cell dependencies)
+- [ ] Performance: background execution via Web Workers
 
-- [ ] Chunked uploads for large files (>1GB)
-- [ ] Resumable uploads
-- [ ] Deduplication via content addressing
-- [ ] Storage quotas per org
-- [ ] Archive tier for cold artifacts
-- [ ] Remote pointer support (don't store blob, just reference)
+#### Server Execution (Future)
 
-### Performance
-
-- [ ] CDN for static assets and popular blobs
-- [ ] Image/preview thumbnails
-- [ ] Lazy loading for large artifact trees
-- [ ] Pagination everywhere
-- [ ] Background indexing
-- [ ] Search result caching
-
-### Infrastructure
-
-- [ ] Kubernetes deployment (Helm chart)
-- [ ] Horizontal scaling guide
-- [ ] Database read replicas
-- [ ] Redis for caching/sessions
-- [ ] Prometheus metrics
-- [ ] Grafana dashboards
-
-### Federation Scale
-
-- [ ] Efficient sync for large catalogs
-- [ ] Partial sync (metadata only, blobs on demand)
-- [ ] Sync scheduling and prioritization
-- [ ] Federation health monitoring
+- [ ] Elixir code cell execution (sandboxed, via NIF bridge)
+- [ ] Python cell execution (containerized, via Oban worker)
+- [ ] Resource limits (CPU time, memory)
+- [ ] Execution queue with priority
 
 ---
 
-## Platform 8: Enterprise (v1.0) — Q1 2028
+### Phase 8: API, CLI & Integrations (v0.8)
 
-**Goal:** Enterprise-ready, self-hosted platform
+> **Goal:** Programmatic access and ecosystem connectivity.
 
-### Compliance
+#### REST API
 
-- [ ] Audit logs (all actions)
-- [ ] Audit log export
-- [ ] Retention policies
-- [ ] Data deletion (GDPR)
-- [ ] 21 CFR Part 11 (FDA) — future consideration
+- [ ] API v1 with OpenAPI spec
+- [ ] API key management (per-user)
+- [ ] Rate limiting (per-key)
+- [ ] Endpoints: spaces, notebooks, protocols, datasets, users, orgs, search
+- [ ] Webhooks for space events (created, updated, published, starred, forked)
 
-### Administration
+#### CLI Tool
 
-- [ ] Admin dashboard
-- [ ] User management
-- [ ] Organization management
-- [ ] Node configuration UI
-- [ ] System health monitoring
-- [ ] Backup/restore tools
+- [ ] `cyanea` CLI (Rust binary or Elixir escript)
+- [ ] Login/auth flow (browser-based OAuth)
+- [ ] Upload datasets from command line
+- [ ] Download spaces/datasets
+- [ ] Publish to network
+- [ ] Search from terminal
 
-### Security
+#### External Integrations
 
-- [ ] Two-factor authentication
-- [ ] IP allowlisting
-- [ ] Session management
-- [ ] Security event logging
-- [ ] Dependency vulnerability scanning
-
-### Self-Hosted Excellence
-
-- [ ] One-command Docker deploy
-- [ ] Helm chart for Kubernetes
-- [ ] Air-gapped installation support
-- [ ] Upgrade path documentation
-- [ ] Backup/restore guides
-- [ ] Troubleshooting guide
-
-### Sensitive Data
-
-- [ ] PHI/PII detection warnings
-- [ ] Export controls
-- [ ] De-identification guidance docs
-- [ ] Restricted visibility enforcement
+- [ ] Zenodo sync (push datasets, receive DOI)
+- [ ] ORCID profile sync (pull publications)
+- [ ] PubMed/DOI linking on Spaces
+- [ ] GitHub import (convert repo → Space)
+- [ ] Jupyter notebook import (.ipynb → Cyanea notebook)
 
 ---
 
-## Platform 9: Intelligence (v1.x) — 2028+
+## Migration Strategy (Repository → Space)
 
-**Goal:** AI-powered research assistance
+The existing codebase has "Repositories" and "Artifacts." Here's how to migrate:
 
-**Depends on Labs:** cyanea-ml (embeddings, inference)
+### Step 1: Rename in Code
 
-### Search & Discovery
+- Rename `Cyanea.Repositories` context → `Cyanea.Spaces`
+- Rename `Cyanea.Repositories.Repository` schema → `Cyanea.Spaces.Space`
+- Rename all LiveViews: `RepositoryLive.*` → `SpaceLive.*`
+- Update router paths: `/:username/:slug` routes point to SpaceLive
+- Update templates and components
 
-- [ ] Semantic search (embeddings)
-- [ ] Similar artifact recommendations
-- [ ] Related protocol suggestions
-- [ ] Cross-project linking suggestions
+### Step 2: Database Migration
 
-### AI Features
+- Rename `repositories` table → `spaces` (ALTER TABLE RENAME)
+- Add new columns (`owner_type`, `forked_from_id`, `fork_count`, `star_count`, `current_revision_id`, `global_id`)
+- Create new tables (revisions, notebooks, protocols, datasets, blobs, stars, discussions, comments, activity_events)
+- Migrate data from `artifacts` → appropriate new tables based on artifact type
+- Drop old tables (artifacts, artifact_events, artifact_files, commits)
 
-- [ ] Natural language queries
-- [ ] Automatic metadata extraction
-- [ ] Protocol summarization
-- [ ] Data quality suggestions
-- [ ] Anomaly detection in datasets
+### Step 3: Context Rewrite
 
-### Benchmarks & Challenges
+- `Spaces` context replaces `Repositories` + `Artifacts`
+- New contexts: `Notebooks`, `Protocols`, `Datasets`, `Blobs`, `Revisions`, `Stars`, `Discussions`, `ActivityFeed`
+- Update `Search` context for new entity types
+- Update `Federation` context for Space-based global IDs
 
-- [ ] Challenge/benchmark scaffolding
-- [ ] Leaderboards with reproducible runs
-- [ ] Compute attestation
-- [ ] Community benchmark curation
+### Step 4: UI Update
 
-### Analytics
-
-- [ ] Usage analytics dashboard
-- [ ] Download/view statistics
-- [ ] Citation tracking (if DOI)
-- [ ] Impact metrics
-
----
-
-## Future Ideas (Post-v1)
-
-### Advanced Artifacts
-
-- [ ] Model artifact type (bio ML models, HF-style)
-- [ ] Registry items (plasmids, primers, antibodies)
-- [ ] Instrument data integrations
-
-### Interactive Apps
-
-- [ ] "Spaces" — deploy visualizers/dashboards
-- [ ] QC dashboard templates
-- [ ] Data exploration apps
-- [ ] Custom viewer plugins
-
-### Collaboration
-
-- [ ] Proposal/review workflow for artifact changes
-- [ ] Suggested edits
-- [ ] Merge requests for derived artifacts
-- [ ] Real-time collaborative editing (stretch)
-
-### Ecosystem
-
-- [ ] Plugin/extension system
-- [ ] Marketplace for templates
-- [ ] Instrument integrations
-- [ ] Lab notebook imports (ELN/LIMS)
+- New Space landing page with tabs (Overview, Notebooks, Protocols, Datasets, Files, Discussions, Activity)
+- New editors for Notebooks and Protocols
+- Updated Dashboard (spaces, starred, activity)
+- Updated Explore page (search across all content types)
 
 ---
 
-## Milestones
+## Notebook Content Schema (JSONB)
 
-### Cyanea Labs (Rust Ecosystem)
+```json
+{
+  "cells": [
+    {
+      "id": "uuid",
+      "type": "markdown",
+      "source": "# Introduction\n\nThis notebook demonstrates..."
+    },
+    {
+      "id": "uuid",
+      "type": "code",
+      "language": "python",
+      "source": "import cyanea\nresult = cyanea.seq.gc_content('ATCGATCG')\nprint(result)",
+      "outputs": [
+        {
+          "type": "text",
+          "content": "0.5"
+        }
+      ]
+    },
+    {
+      "id": "uuid",
+      "type": "code",
+      "language": "elixir",
+      "source": "Cyanea.Native.dna_gc_content(\"ATCGATCG\")",
+      "outputs": []
+    }
+  ]
+}
+```
 
-| Phase | Target | Status | Key Deliverable |
-|-------|--------|--------|-----------------|
-| L0 | Q1 2026 | **DONE** | cyanea-core: traits, errors, hashing, compression |
-| L1 | Q1 2026 | **DONE** | cyanea-seq: sequences, FASTA/FASTQ, k-mers, quality |
-| L2 | Q1 2026 | **DONE** | cyanea-align: NW, SW, semi-global, MSA, banded, GPU dispatch |
-| L3 | Q1 2026 | **DONE** | cyanea-omics: matrices, intervals, variants, AnnData |
-| L4 | Q1 2026 | **PARTIAL** | cyanea-gpu: CPU backend complete; CUDA/Metal need HW SDKs |
-| L5 | Q1 2026 | **DONE** | cyanea-wasm: full bindings, wasm-bindgen ready |
-| L6 | Q1 2026 | **DONE** | cyanea-stats + ml + chem + struct + phylo: all complete |
-| — | Q1 2026 | **DONE** | cyanea-py: Python bindings (seq, align, stats, core, ml) |
-| — | Q1 2026 | **DONE** | cyanea-io: CSV, VCF, BED, GFF3 parsers |
+## Protocol Content Schema (JSONB)
 
-### Cyanea Platform (Federated Hub)
+```json
+{
+  "materials": [
+    {
+      "name": "TRIzol Reagent",
+      "quantity": "1 mL per 10^7 cells",
+      "vendor": "Thermo Fisher",
+      "catalog": "15596026"
+    }
+  ],
+  "equipment": [
+    {
+      "name": "Centrifuge",
+      "settings": "12,000 × g, 4°C"
+    }
+  ],
+  "steps": [
+    {
+      "number": 1,
+      "title": "Cell Lysis",
+      "description": "Add 1 mL TRIzol per 10^7 cells. Pipet up and down to lyse.",
+      "duration": "5 min",
+      "temperature": "room temperature",
+      "notes": "Work in a fume hood.",
+      "images": []
+    }
+  ],
+  "tips": [
+    "Keep samples on ice between steps.",
+    "Use RNase-free tubes and filter tips."
+  ]
+}
+```
 
-| Version | Target | Key Deliverable |
-|---------|--------|-----------------|
-| v0.1 | Q2 2026 | MVP: Artifacts, Projects, Basic Federation, Lineage |
-| v0.2 | Q3 2026 | Federation: Full sync, mirroring, cross-node refs |
-| v0.3 | Q4 2026 | Community: Discussions, notifications, discovery |
-| v0.4 | Q1 2027 | Life Sciences: Protocols, datasets, ontologies |
-| v0.5 | Q2 2027 | Reproducibility: Pipelines, runs, QC gates |
-| v0.6 | Q3 2027 | Integrations: API, CLI, Zenodo, SSO |
-| v0.7 | Q4 2027 | Scale: Large files, performance, infra |
-| v1.0 | Q1 2028 | Enterprise: Compliance, admin, self-hosted |
+---
+
+## URL Structure
+
+```
+/                                           → Home / landing
+/explore                                    → Discover spaces, search
+/dashboard                                  → User's spaces, starred, activity
+/new                                        → Create new Space
+/settings                                   → User settings
+/notifications                              → Notification center
+
+/:owner                                     → User or Org profile
+/:owner/:space                              → Space landing page
+/:owner/:space/notebooks/:slug              → Notebook viewer/editor
+/:owner/:space/protocols/:slug              → Protocol viewer/editor
+/:owner/:space/datasets/:slug               → Dataset viewer
+/:owner/:space/files/*path                  → File browser / viewer
+/:owner/:space/discussions                  → Discussions list
+/:owner/:space/discussions/:id              → Discussion thread
+/:owner/:space/history                      → Revision history
+/:owner/:space/settings                     → Space settings
+/:owner/:space/fork                         → Fork action
+
+/organizations/new                          → Create org
+/organizations/:slug/settings               → Org settings
+/organizations/:slug/members                → Org member management
+
+/auth/login                                 → Login
+/auth/register                              → Register
+/auth/orcid                                 → ORCID OAuth
+```
+
+---
+
+## Tech Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Framework | Phoenix 1.8 + LiveView 1.0 | Real-time UI, server-rendered, no SPA complexity |
+| Database | PostgreSQL 16 | JSONB for flexible schemas, proven reliability |
+| Object storage | S3-compatible (ExAws) | MinIO for self-hosted, AWS S3 / R2 for cloud |
+| Search | Meilisearch | Fast, typo-tolerant, self-hostable, faceted filtering |
+| Background jobs | Oban | Reliable, persistent, observable, Elixir-native |
+| Auth | ORCID OAuth + email/password + Guardian JWT | Researcher identity standard |
+| Compute | Rustler NIFs (cyanea-native) | Parsing, hashing, alignment, stats — native speed |
+| Browser compute | cyanea-wasm | Client-side file preview, notebook execution |
+| Payments | Stripe | Checkout, subscriptions, customer portal |
+| Email | Swoosh | Elixir-native, multiple adapters |
+| Rich text | Markdown + LiveView | No WYSIWYG complexity, familiar to scientists |
+| Deployment | Fly.io + Docker | Easy self-hosting, managed option |
 
 ---
 
 ## Success Metrics
 
-### Cyanea Labs
-
-| Phase | Metric | Target |
-|-------|--------|--------|
-| L1 | crates.io downloads (cyanea-seq) | 1K/month |
-| L2 | GitHub stars (labs repo) | 500 |
-| L3 | PyPI downloads (cyanea-py) | 5K/month |
-| L5 | npm downloads (@cyanea/seq) | 2K/month |
-| L6 | Academic citations | 5 papers |
-| All | Benchmark performance | Fastest in class |
-| All | WASM bundle size | <1MB core |
-| All | Test coverage | >80% |
-
-### Cyanea Platform
-
-#### Platform 1 (MVP)
+### Phase 1-2 (Foundation + Content)
 
 | Metric | Target |
 |--------|--------|
-| Nodes installed | 10 |
 | Registered users | 100 |
-| Public artifacts | 200 |
+| Public Spaces | 200 |
 | Active organizations | 20 |
-| Derivations created | 50 |
-| Page load time | <2s |
+| Notebooks created | 100 |
+| Protocols shared | 50 |
+| Datasets uploaded | 50 |
+| Page load time | < 2s |
 
-#### Platform 2-3 (Federation + Community)
+### Phase 3-4 (Community + Pro)
 
 | Metric | Target |
 |--------|--------|
-| Federated nodes | 50 |
 | Registered users | 1,000 |
-| Public artifacts | 2,000 |
-| Cross-node derivations | 100 |
-| Discussions created | 500 |
-| Daily active users | >10% |
+| Public Spaces | 2,000 |
+| Forks created | 200 |
+| Discussions | 500 |
+| Pro subscribers | 50 |
+| MRR | $500 |
 
-#### Platform 4-5 (Life Sciences + Repro)
+### Phase 5-6 (Federation + Life Sciences)
 
 | Metric | Target |
 |--------|--------|
 | Registered users | 5,000 |
-| Artifacts with repro runs | 500 |
-| Protocols forked | 200 |
-| First DOI minted | Yes |
-| QC pass rate | >80% |
-| Scientific publication mention | Yes |
-
-#### Platform 6+ (Scale)
-
-| Metric | Target |
-|--------|--------|
-| Registered users | 10,000+ |
-| Federated nodes | 200+ |
-| Enterprise pilots | 3 |
-| Self-hosted deployments | 50 |
-| CLI downloads | 1,000 |
+| Federated nodes | 20 |
+| Cross-node forks | 50 |
+| DOIs minted | 10 |
+| First academic citation | Yes |
 
 ---
 
 ## Non-Goals (Deliberate Exclusions)
 
-### Cyanea Labs
-
 | Non-Goal | Reason |
 |----------|--------|
-| Rewrite every tool | Focus on core primitives first |
-| Support all GPU vendors day one | CUDA + Metal first, ROCm later |
-| 100% parity with established tools | Focus on common cases, iterate |
-| Build workflow orchestration | Provide building blocks, not engine |
-| Windows GPU support (initial) | Focus on Linux/macOS first |
-
-### Cyanea Platform
-
-| Non-Goal | Reason |
-|----------|--------|
+| Git as user-facing abstraction | Too technical for target audience |
+| Real-time collaborative editing (Phase 1-4) | Too complex; revisit with CRDTs later |
+| Full LIMS/ELN replacement | Focus on sharing and discovery, not inventory |
+| Workflow orchestration engine | Wrap existing tools (Nextflow, Snakemake) |
 | Mobile native apps | PWA is sufficient |
-| Sequence editor | Use SnapGene, Benchling, etc. |
-| Full LIMS replacement | Focus on sharing, not inventory |
-| Workflow orchestration engine | Wrap existing (Nextflow, etc.) |
-| Real-time collaborative editing | Too complex, defer |
-| Perfect ontology coverage | Iterate based on usage |
-| Central blob storage for everything | Support pointers/remote refs |
-| Automated compliance | Provide tools, not magic |
-
----
-
-## Open Design Questions
-
-Decisions to make as we build (Claude Code should propose options):
-
-### Cyanea Labs
-
-| Question | Phase | Considerations |
-|----------|-------|----------------|
-| GPU abstraction strategy | L4 | Custom trait vs wgpu vs backend-specific |
-| SIMD approach | L2 | std::simd (nightly) vs simdeez vs hand-written |
-| WASM async model | L5 | Blocking + Workers vs async/await |
-| Error handling crate | L0 | thiserror vs anyhow vs custom |
-| Python binding style | L1+ | Thin bindings vs Pythonic wrappers |
-| Workspace vs multi-repo | L0 | Single Cargo workspace vs separate repos |
-| Minimum Rust version | L0 | Stable vs nightly (for SIMD, etc.) |
-| Benchmarking datasets | L1+ | Synthetic vs real public datasets |
-
-### Cyanea Platform
-
-| Question | Phase | Considerations |
-|----------|-------|----------------|
-| Federation protocol | P1-2 | Custom, ActivityPub-inspired, OCI-like? |
-| Artifact schema strictness | P1 | Permissive MVP vs strict validation? |
-| Global ID format | P1 | `cyanea://org/project/artifact@version`? |
-| Event sourcing depth | P1 | Full ES vs hybrid approach? |
-| Manifest format | P1-2 | JSON, protobuf, custom? |
-| Sync conflict resolution | P2 | Immutable = no conflicts, but metadata? |
-| Key management | P2 | HSM, platform-managed, user-managed? |
-| Search federation | P2 | Centralized index vs distributed query? |
-| Compute for repro runs | P5 | Self-hosted only vs managed option? |
-
----
-
-## Principles
-
-### Cyanea Labs
-
-1. **Performance is a feature** — If it's not fast, it won't be used
-2. **WASM-first thinking** — Every library should work in the browser
-3. **GPU is not optional** — Number-crunching needs acceleration
-4. **Coherent APIs** — Consistent patterns across all crates
-5. **Zero magic** — Transparent, documented algorithms
-6. **Interop matters** — Python, JS, Elixir bindings are first-class
-7. **Benchmark everything** — Claims require evidence
-
-### Cyanea Platform
-
-1. **Federation is not optional** — Every feature should work in standalone and federated mode
-2. **Artifacts have identity** — Content-addressed, globally referenceable, typed
-3. **Lineage is sacred** — Never break the provenance chain
-4. **Community > customers** — Researchers first, revenue second
-5. **Open by default** — Make sharing easy, private when needed
-6. **Design matters** — Scientists deserve beautiful tools
-7. **Ship and iterate** — Perfect is the enemy of shipped
+| Sequence editor | Use specialized tools (SnapGene, Benchling) |
+| Central blob storage for all data | Support external references for large public datasets |
+| Automated compliance | Provide tools and warnings, not magic |
