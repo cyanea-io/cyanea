@@ -151,9 +151,14 @@ defmodule Cyanea.NotebooksCellsTest do
       assert Notebooks.executable_cell?(cell)
     end
 
-    test "returns false for non-cyanea code cells" do
-      refute Notebooks.executable_cell?(%{"type" => "code", "language" => "elixir"})
+    test "returns true for elixir code cells" do
+      cell = %{"type" => "code", "language" => "elixir"}
+      assert Notebooks.executable_cell?(cell)
+    end
+
+    test "returns false for non-executable code cells" do
       refute Notebooks.executable_cell?(%{"type" => "code", "language" => "python"})
+      refute Notebooks.executable_cell?(%{"type" => "code", "language" => "r"})
     end
 
     test "returns false for markdown cells" do
@@ -162,6 +167,20 @@ defmodule Cyanea.NotebooksCellsTest do
 
     test "returns false for nil" do
       refute Notebooks.executable_cell?(nil)
+    end
+  end
+
+  describe "server_executable_cell?/1" do
+    test "returns true for elixir code cells" do
+      assert Notebooks.server_executable_cell?(%{"type" => "code", "language" => "elixir"})
+    end
+
+    test "returns false for cyanea code cells" do
+      refute Notebooks.server_executable_cell?(%{"type" => "code", "language" => "cyanea"})
+    end
+
+    test "returns false for other languages" do
+      refute Notebooks.server_executable_cell?(%{"type" => "code", "language" => "python"})
     end
   end
 

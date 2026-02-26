@@ -1,9 +1,9 @@
 // Web Worker for notebook cell execution.
-// Loads cyanea-wasm and interprets a simple command language:
-//   variable = Namespace.function(args)
-//   Namespace.function(args)
-//   display(expr)
-//   display(expr, "type")
+// Loads cyanea-wasm and interprets a command language with:
+//   variable = Namespace.function(args)   |   let variable = expr
+//   Namespace.function(args)              |   display(expr) / print(expr)
+//   if condition ... else ... end         |   for x in iterable ... end
+//   expr |> Namespace.function(args)      |   `backtick strings`
 //   // comment or # comment
 
 let wasmReady = false
@@ -33,264 +33,684 @@ function getNamespaces() {
   }
 }
 
-// ── Argument Parser ──────────────────────────────────────────────────────
-// Parses a comma-separated argument list from a string, returning an array
-// of parsed values. Supports: strings, numbers, booleans, null, arrays,
-// objects (JSON), and variable references.
+// ── Tokenizer ─────────────────────────────────────────────────────────────
+// Converts source code into a flat array of tokens with line/column info.
 
-function parseArgList(argsStr, context) {
-  argsStr = argsStr.trim()
-  if (argsStr === "") return []
+const TokenType = {
+  // Literals
+  NUMBER: "NUMBER",
+  STRING: "STRING",
+  BACKTICK_STRING: "BACKTICK_STRING",
+  TRUE: "TRUE",
+  FALSE: "FALSE",
+  NULL: "NULL",
+  // Identifiers & keywords
+  IDENT: "IDENT",
+  LET: "LET",
+  IF: "IF",
+  ELSE: "ELSE",
+  END: "END",
+  FOR: "FOR",
+  IN: "IN",
+  // Operators & punctuation
+  ASSIGN: "ASSIGN",    // =
+  PIPE: "PIPE",        // |>
+  DOT: "DOT",          // .
+  COMMA: "COMMA",      // ,
+  LPAREN: "LPAREN",    // (
+  RPAREN: "RPAREN",    // )
+  LBRACKET: "LBRACKET",// [
+  RBRACKET: "RBRACKET",// ]
+  LBRACE: "LBRACE",    // {
+  RBRACE: "RBRACE",    // }
+  COLON: "COLON",      // :
+  // Comparison (for if conditions)
+  EQ: "EQ",            // ==
+  NEQ: "NEQ",          // !=
+  LT: "LT",            // <
+  GT: "GT",             // >
+  LTE: "LTE",          // <=
+  GTE: "GTE",          // >=
+  AND: "AND",          // &&
+  OR: "OR",            // ||
+  NOT: "NOT",          // !
+  PLUS: "PLUS",
+  MINUS: "MINUS",
+  STAR: "STAR",
+  SLASH: "SLASH",
+  MOD: "MOD",          // %
+  // Control
+  NEWLINE: "NEWLINE",
+  EOF: "EOF",
+}
 
-  const args = []
+const KEYWORDS = {
+  let: TokenType.LET,
+  if: TokenType.IF,
+  else: TokenType.ELSE,
+  end: TokenType.END,
+  for: TokenType.FOR,
+  in: TokenType.IN,
+  true: TokenType.TRUE,
+  false: TokenType.FALSE,
+  null: TokenType.NULL,
+}
+
+function tokenize(source) {
+  const tokens = []
   let i = 0
+  let line = 1
+  let col = 1
 
-  while (i < argsStr.length) {
-    // Skip whitespace
-    while (i < argsStr.length && argsStr[i] === " ") i++
-    if (i >= argsStr.length) break
-
-    const [value, newI] = parseValue(argsStr, i, context)
-    args.push(value)
-    i = newI
-
-    // Skip whitespace then comma
-    while (i < argsStr.length && argsStr[i] === " ") i++
-    if (i < argsStr.length && argsStr[i] === ",") i++
-  }
-
-  return args
-}
-
-function parseValue(str, i, context) {
-  // Skip whitespace
-  while (i < str.length && str[i] === " ") i++
-
-  const ch = str[i]
-
-  // String literal (double or single quoted)
-  if (ch === '"' || ch === "'") {
-    return parseString(str, i)
-  }
-
-  // Array literal
-  if (ch === "[") {
-    return parseArray(str, i, context)
-  }
-
-  // Object literal
-  if (ch === "{") {
-    return parseObject(str, i, context)
-  }
-
-  // Number, boolean, null, or variable reference
-  return parseAtom(str, i, context)
-}
-
-function parseString(str, i) {
-  const quote = str[i]
-  i++ // skip opening quote
-  let result = ""
-  while (i < str.length && str[i] !== quote) {
-    if (str[i] === "\\") {
+  function advance(n = 1) {
+    for (let k = 0; k < n; k++) {
+      if (source[i] === "\n") { line++; col = 1 } else { col++ }
       i++
-      const esc = { n: "\n", t: "\t", r: "\r", "\\": "\\", "'": "'", '"': '"' }
-      result += esc[str[i]] || str[i]
-    } else {
-      result += str[i]
     }
-    i++
   }
-  i++ // skip closing quote
-  return [result, i]
-}
 
-function parseArray(str, i, context) {
-  i++ // skip [
-  const items = []
-  while (i < str.length) {
-    while (i < str.length && str[i] === " ") i++
-    if (str[i] === "]") { i++; break }
-    const [val, newI] = parseValue(str, i, context)
-    items.push(val)
-    i = newI
-    while (i < str.length && str[i] === " ") i++
-    if (str[i] === ",") i++
+  function peek(offset = 0) { return source[i + offset] }
+  function at(ch) { return source[i] === ch }
+
+  function addToken(type, value) {
+    tokens.push({ type, value, line, col })
   }
-  return [items, i]
-}
 
-function parseObject(str, i, context) {
-  i++ // skip {
-  const obj = {}
-  while (i < str.length) {
-    while (i < str.length && str[i] === " ") i++
-    if (str[i] === "}") { i++; break }
-    // Parse key (string or unquoted identifier)
-    let key
-    if (str[i] === '"' || str[i] === "'") {
-      const [k, newI] = parseString(str, i)
-      key = k
-      i = newI
-    } else {
-      let k = ""
-      while (i < str.length && /[a-zA-Z0-9_]/.test(str[i])) { k += str[i]; i++ }
-      key = k
+  while (i < source.length) {
+    // Skip spaces and tabs (not newlines)
+    if (at(" ") || at("\t") || at("\r")) {
+      advance()
+      continue
     }
-    while (i < str.length && str[i] === " ") i++
-    if (str[i] === ":") i++ // skip colon
-    const [val, newI] = parseValue(str, i, context)
-    obj[key] = val
-    i = newI
-    while (i < str.length && str[i] === " ") i++
-    if (str[i] === ",") i++
-  }
-  return [obj, i]
-}
 
-function parseAtom(str, i, context) {
-  let token = ""
-  // Read until delimiter (comma, paren, bracket, brace, end)
-  while (i < str.length && !/[,)\]\}]/.test(str[i])) {
-    token += str[i]
-    i++
-  }
-  token = token.trim()
-
-  if (token === "true") return [true, i]
-  if (token === "false") return [false, i]
-  if (token === "null") return [null, i]
-
-  // Number
-  if (/^-?\d+(\.\d+)?$/.test(token)) {
-    return [parseFloat(token), i]
-  }
-
-  // Variable reference
-  if (/^[a-zA-Z_]\w*$/.test(token) && context.has(token)) {
-    return [context.get(token), i]
-  }
-
-  // Unknown — return as string
-  return [token, i]
-}
-
-// ── Line Parser ──────────────────────────────────────────────────────────
-// Parses a single line of code and returns an execution descriptor.
-
-function parseLine(line) {
-  line = line.trim()
-
-  // Empty or comment
-  if (!line || line.startsWith("//") || line.startsWith("#")) {
-    return { type: "skip" }
-  }
-
-  // display(expr) or display(expr, "type")
-  const displayMatch = line.match(/^display\((.+)\)$/)
-  if (displayMatch) {
-    return { type: "display", argsStr: displayMatch[1] }
-  }
-
-  // Assignment: varName = Namespace.function(args)
-  const assignMatch = line.match(/^([a-zA-Z_]\w*)\s*=\s*(.+)$/)
-  if (assignMatch) {
-    const varName = assignMatch[1]
-    const expr = assignMatch[2].trim()
-    const call = parseCall(expr)
-    if (call) {
-      return { type: "assign", varName, ...call }
+    // Newline
+    if (at("\n")) {
+      addToken(TokenType.NEWLINE, "\n")
+      advance()
+      continue
     }
-    // Could be assigning a literal or variable
-    return { type: "assign_literal", varName, expr }
+
+    // Comment: // or #
+    if ((at("/") && peek(1) === "/") || at("#")) {
+      while (i < source.length && !at("\n")) advance()
+      continue
+    }
+
+    // Backtick string
+    if (at("`")) {
+      advance() // skip opening backtick
+      let str = ""
+      while (i < source.length && !at("`")) {
+        if (at("\\")) {
+          advance()
+          const esc = { n: "\n", t: "\t", r: "\r", "\\": "\\", "`": "`" }
+          str += esc[source[i]] || source[i]
+        } else {
+          str += source[i]
+        }
+        advance()
+      }
+      advance() // skip closing backtick
+      addToken(TokenType.BACKTICK_STRING, str)
+      continue
+    }
+
+    // String literals
+    if (at('"') || at("'")) {
+      const quote = source[i]
+      advance()
+      let str = ""
+      while (i < source.length && !at(quote)) {
+        if (at("\\")) {
+          advance()
+          const esc = { n: "\n", t: "\t", r: "\r", "\\": "\\", "'": "'", '"': '"' }
+          str += esc[source[i]] || source[i]
+        } else {
+          str += source[i]
+        }
+        advance()
+      }
+      advance() // closing quote
+      addToken(TokenType.STRING, str)
+      continue
+    }
+
+    // Numbers
+    if (/[0-9]/.test(source[i]) || (at("-") && /[0-9]/.test(peek(1)) && (tokens.length === 0 || [TokenType.ASSIGN, TokenType.LPAREN, TokenType.COMMA, TokenType.LBRACKET, TokenType.COLON, TokenType.PIPE, TokenType.EQ, TokenType.NEQ, TokenType.LT, TokenType.GT, TokenType.LTE, TokenType.GTE, TokenType.AND, TokenType.OR, TokenType.PLUS, TokenType.MINUS, TokenType.STAR, TokenType.SLASH, TokenType.MOD, TokenType.NEWLINE].includes(tokens[tokens.length - 1]?.type)))) {
+      let num = ""
+      if (at("-")) { num += "-"; advance() }
+      while (i < source.length && /[0-9]/.test(source[i])) { num += source[i]; advance() }
+      if (i < source.length && at(".") && /[0-9]/.test(peek(1))) {
+        num += "."; advance()
+        while (i < source.length && /[0-9]/.test(source[i])) { num += source[i]; advance() }
+      }
+      addToken(TokenType.NUMBER, parseFloat(num))
+      continue
+    }
+
+    // Pipe operator |>
+    if (at("|") && peek(1) === ">") {
+      addToken(TokenType.PIPE, "|>")
+      advance(2)
+      continue
+    }
+
+    // Two-character operators
+    if (at("=") && peek(1) === "=") { addToken(TokenType.EQ, "=="); advance(2); continue }
+    if (at("!") && peek(1) === "=") { addToken(TokenType.NEQ, "!="); advance(2); continue }
+    if (at("<") && peek(1) === "=") { addToken(TokenType.LTE, "<="); advance(2); continue }
+    if (at(">") && peek(1) === "=") { addToken(TokenType.GTE, ">="); advance(2); continue }
+    if (at("&") && peek(1) === "&") { addToken(TokenType.AND, "&&"); advance(2); continue }
+    if (at("|") && peek(1) === "|") { addToken(TokenType.OR, "||"); advance(2); continue }
+
+    // Single-character tokens
+    const singleChars = {
+      "=": TokenType.ASSIGN,
+      ".": TokenType.DOT,
+      ",": TokenType.COMMA,
+      "(": TokenType.LPAREN,
+      ")": TokenType.RPAREN,
+      "[": TokenType.LBRACKET,
+      "]": TokenType.RBRACKET,
+      "{": TokenType.LBRACE,
+      "}": TokenType.RBRACE,
+      ":": TokenType.COLON,
+      "<": TokenType.LT,
+      ">": TokenType.GT,
+      "!": TokenType.NOT,
+      "+": TokenType.PLUS,
+      "-": TokenType.MINUS,
+      "*": TokenType.STAR,
+      "/": TokenType.SLASH,
+      "%": TokenType.MOD,
+    }
+
+    if (singleChars[source[i]]) {
+      addToken(singleChars[source[i]], source[i])
+      advance()
+      continue
+    }
+
+    // Identifiers and keywords
+    if (/[a-zA-Z_]/.test(source[i])) {
+      let ident = ""
+      while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) {
+        ident += source[i]
+        advance()
+      }
+      const kwType = KEYWORDS[ident]
+      addToken(kwType || TokenType.IDENT, ident)
+      continue
+    }
+
+    // Unknown character — skip
+    advance()
   }
 
-  // Bare call: Namespace.function(args)
-  const call = parseCall(line)
-  if (call) {
-    return { type: "call", ...call }
-  }
-
-  // Fallback: treat as expression
-  return { type: "expression", expr: line }
+  addToken(TokenType.EOF, null)
+  return tokens
 }
 
-function parseCall(expr) {
-  const match = expr.match(/^([A-Z]\w*)\.(\w+)\((.*)?\)$/)
-  if (!match) return null
-  return {
-    namespace: match[1],
-    funcName: match[2],
-    argsStr: match[3] || "",
+// ── Parser ────────────────────────────────────────────────────────────────
+// Recursive-descent parser producing an AST from tokens.
+
+function parse(tokens) {
+  let pos = 0
+
+  function current() { return tokens[pos] }
+  function peek(offset = 0) { return tokens[pos + offset] }
+  function at(type) { return current().type === type }
+  function atAny(...types) { return types.includes(current().type) }
+
+  function expect(type) {
+    if (!at(type)) {
+      throw new Error(`Line ${current().line}: Expected ${type}, got ${current().type} (${JSON.stringify(current().value)})`)
+    }
+    return advance()
   }
+
+  function advance() {
+    const tok = tokens[pos]
+    pos++
+    return tok
+  }
+
+  function skipNewlines() {
+    while (pos < tokens.length && at(TokenType.NEWLINE)) advance()
+  }
+
+  // Program -> Statement*
+  function parseProgram() {
+    const statements = []
+    skipNewlines()
+    while (!at(TokenType.EOF)) {
+      statements.push(parseStatement())
+      skipNewlines()
+    }
+    return { type: "Program", statements }
+  }
+
+  // Statement -> IfElse | ForLoop | Assignment | ExprStatement
+  function parseStatement() {
+    skipNewlines()
+
+    if (at(TokenType.IF)) return parseIf()
+    if (at(TokenType.FOR)) return parseFor()
+
+    // let x = expr
+    if (at(TokenType.LET)) {
+      const letTok = advance()
+      const nameTok = expect(TokenType.IDENT)
+      expect(TokenType.ASSIGN)
+      const expr = parsePipeExpr()
+      return { type: "Assignment", name: nameTok.value, expr, line: letTok.line }
+    }
+
+    // Could be assignment (x = expr) or expression statement
+    // Lookahead: IDENT ASSIGN
+    if (at(TokenType.IDENT) && peek(1)?.type === TokenType.ASSIGN && peek(2)?.type !== TokenType.ASSIGN) {
+      const nameTok = advance()
+      advance() // skip =
+      const expr = parsePipeExpr()
+      return { type: "Assignment", name: nameTok.value, expr, line: nameTok.line }
+    }
+
+    // Expression statement
+    const expr = parsePipeExpr()
+    return { type: "ExprStatement", expr, line: expr.line }
+  }
+
+  // If -> 'if' Expr NEWLINE Statement* ('else' NEWLINE Statement*)? 'end'
+  function parseIf() {
+    const ifTok = expect(TokenType.IF)
+    const condition = parsePipeExpr()
+    skipNewlines()
+
+    const thenBody = []
+    while (!at(TokenType.ELSE) && !at(TokenType.END) && !at(TokenType.EOF)) {
+      thenBody.push(parseStatement())
+      skipNewlines()
+    }
+
+    let elseBody = null
+    if (at(TokenType.ELSE)) {
+      advance()
+      skipNewlines()
+      elseBody = []
+      while (!at(TokenType.END) && !at(TokenType.EOF)) {
+        elseBody.push(parseStatement())
+        skipNewlines()
+      }
+    }
+
+    expect(TokenType.END)
+    return { type: "IfElse", condition, then: thenBody, else: elseBody, line: ifTok.line }
+  }
+
+  // For -> 'for' IDENT 'in' Expr NEWLINE Statement* 'end'
+  function parseFor() {
+    const forTok = expect(TokenType.FOR)
+    const varTok = expect(TokenType.IDENT)
+    expect(TokenType.IN)
+    const iterable = parsePipeExpr()
+    skipNewlines()
+
+    const body = []
+    while (!at(TokenType.END) && !at(TokenType.EOF)) {
+      body.push(parseStatement())
+      skipNewlines()
+    }
+
+    expect(TokenType.END)
+    return { type: "ForLoop", variable: varTok.value, iterable, body, line: forTok.line }
+  }
+
+  // PipeExpr -> CompExpr (|> Call)*
+  function parsePipeExpr() {
+    let left = parseCompExpr()
+
+    while (at(TokenType.PIPE)) {
+      advance()
+      skipNewlines()
+      const right = parseCompExpr()
+      if (right.type !== "Call" && right.type !== "Display") {
+        throw new Error(`Line ${right.line}: Pipe target must be a function call`)
+      }
+      left = { type: "Pipe", left, right, line: left.line }
+    }
+
+    return left
+  }
+
+  // CompExpr -> AddExpr ((== | != | < | > | <= | >= | && | ||) AddExpr)*
+  function parseCompExpr() {
+    let left = parseAddExpr()
+
+    while (atAny(TokenType.EQ, TokenType.NEQ, TokenType.LT, TokenType.GT, TokenType.LTE, TokenType.GTE, TokenType.AND, TokenType.OR)) {
+      const op = advance()
+      const right = parseAddExpr()
+      left = { type: "BinOp", op: op.value, left, right, line: op.line }
+    }
+
+    return left
+  }
+
+  // AddExpr -> MulExpr ((+ | -) MulExpr)*
+  function parseAddExpr() {
+    let left = parseMulExpr()
+
+    while (atAny(TokenType.PLUS, TokenType.MINUS)) {
+      const op = advance()
+      const right = parseMulExpr()
+      left = { type: "BinOp", op: op.value, left, right, line: op.line }
+    }
+
+    return left
+  }
+
+  // MulExpr -> UnaryExpr ((* | / | %) UnaryExpr)*
+  function parseMulExpr() {
+    let left = parseUnaryExpr()
+
+    while (atAny(TokenType.STAR, TokenType.SLASH, TokenType.MOD)) {
+      const op = advance()
+      const right = parseUnaryExpr()
+      left = { type: "BinOp", op: op.value, left, right, line: op.line }
+    }
+
+    return left
+  }
+
+  // UnaryExpr -> '!' UnaryExpr | Primary
+  function parseUnaryExpr() {
+    if (at(TokenType.NOT)) {
+      const op = advance()
+      const expr = parseUnaryExpr()
+      return { type: "UnaryOp", op: "!", expr, line: op.line }
+    }
+    return parsePrimary()
+  }
+
+  // Primary -> Literal | Variable | Call | '(' Expr ')' | ArrayLiteral | ObjectLiteral
+  function parsePrimary() {
+    const tok = current()
+
+    // Grouped expression
+    if (at(TokenType.LPAREN)) {
+      advance()
+      const expr = parsePipeExpr()
+      expect(TokenType.RPAREN)
+      return expr
+    }
+
+    // Array literal
+    if (at(TokenType.LBRACKET)) {
+      advance()
+      const items = []
+      while (!at(TokenType.RBRACKET) && !at(TokenType.EOF)) {
+        items.push(parsePipeExpr())
+        if (at(TokenType.COMMA)) advance()
+      }
+      expect(TokenType.RBRACKET)
+      return { type: "ArrayLiteral", items, line: tok.line }
+    }
+
+    // Object literal
+    if (at(TokenType.LBRACE)) {
+      advance()
+      const entries = []
+      while (!at(TokenType.RBRACE) && !at(TokenType.EOF)) {
+        let key
+        if (at(TokenType.STRING) || at(TokenType.BACKTICK_STRING)) {
+          key = advance().value
+        } else {
+          key = expect(TokenType.IDENT).value
+        }
+        expect(TokenType.COLON)
+        const value = parsePipeExpr()
+        entries.push({ key, value })
+        if (at(TokenType.COMMA)) advance()
+      }
+      expect(TokenType.RBRACE)
+      return { type: "ObjectLiteral", entries, line: tok.line }
+    }
+
+    // Number
+    if (at(TokenType.NUMBER)) {
+      advance()
+      return { type: "Literal", value: tok.value, line: tok.line }
+    }
+
+    // String
+    if (at(TokenType.STRING) || at(TokenType.BACKTICK_STRING)) {
+      advance()
+      return { type: "Literal", value: tok.value, line: tok.line }
+    }
+
+    // Boolean / null
+    if (at(TokenType.TRUE)) { advance(); return { type: "Literal", value: true, line: tok.line } }
+    if (at(TokenType.FALSE)) { advance(); return { type: "Literal", value: false, line: tok.line } }
+    if (at(TokenType.NULL)) { advance(); return { type: "Literal", value: null, line: tok.line } }
+
+    // Negative number (unary minus)
+    if (at(TokenType.MINUS)) {
+      advance()
+      const expr = parsePrimary()
+      return { type: "UnaryOp", op: "-", expr, line: tok.line }
+    }
+
+    // Identifier — could be variable, function call, or namespaced call
+    if (at(TokenType.IDENT)) {
+      const ident = advance()
+
+      // display(...) or print(...)
+      if ((ident.value === "display" || ident.value === "print") && at(TokenType.LPAREN)) {
+        advance() // (
+        const args = []
+        while (!at(TokenType.RPAREN) && !at(TokenType.EOF)) {
+          args.push(parsePipeExpr())
+          if (at(TokenType.COMMA)) advance()
+        }
+        expect(TokenType.RPAREN)
+        return { type: "Display", args, line: ident.line }
+      }
+
+      // Namespace.function(args)
+      if (at(TokenType.DOT) && /^[A-Z]/.test(ident.value)) {
+        advance() // .
+        const funcTok = expect(TokenType.IDENT)
+        expect(TokenType.LPAREN)
+        const args = []
+        while (!at(TokenType.RPAREN) && !at(TokenType.EOF)) {
+          args.push(parsePipeExpr())
+          if (at(TokenType.COMMA)) advance()
+        }
+        expect(TokenType.RPAREN)
+        return { type: "Call", namespace: ident.value, func: funcTok.value, args, line: ident.line }
+      }
+
+      // Plain function call: ident(args)
+      if (at(TokenType.LPAREN)) {
+        advance()
+        const args = []
+        while (!at(TokenType.RPAREN) && !at(TokenType.EOF)) {
+          args.push(parsePipeExpr())
+          if (at(TokenType.COMMA)) advance()
+        }
+        expect(TokenType.RPAREN)
+        return { type: "Call", namespace: null, func: ident.value, args, line: ident.line }
+      }
+
+      // Variable reference
+      return { type: "Variable", name: ident.value, line: ident.line }
+    }
+
+    throw new Error(`Line ${tok.line}: Unexpected token: ${tok.type} (${JSON.stringify(tok.value)})`)
+  }
+
+  return parseProgram()
 }
 
-// ── Executor ─────────────────────────────────────────────────────────────
+// ── Interpreter ───────────────────────────────────────────────────────────
+// Walks the AST and executes statements, maintaining a context Map.
 
-function executeCall(namespace, funcName, args) {
-  const namespaces = getNamespaces()
-  const ns = namespaces[namespace]
-  if (!ns) {
-    throw new Error(`Unknown namespace: ${namespace}`)
-  }
-  const fn = ns[funcName]
-  if (typeof fn !== "function") {
-    throw new Error(`Unknown function: ${namespace}.${funcName}`)
-  }
-  return fn(...args)
-}
-
-function executeCode(code, context) {
-  const lines = code.split("\n")
+function interpret(ast, context) {
   let lastResult = undefined
-  let displayOutputs = []
+  const displayOutputs = []
 
-  for (const line of lines) {
-    const parsed = parseLine(line)
+  function evalNode(node) {
+    switch (node.type) {
+      case "Literal":
+        return node.value
 
-    switch (parsed.type) {
-      case "skip":
-        break
+      case "Variable":
+        if (context.has(node.name)) return context.get(node.name)
+        throw new Error(`Line ${node.line}: Undefined variable: ${node.name}`)
 
-      case "display": {
-        const displayArgs = parseArgList(parsed.argsStr, context)
-        const value = displayArgs[0]
-        const outputType = displayArgs[1] || null
+      case "ArrayLiteral":
+        return node.items.map(evalNode)
+
+      case "ObjectLiteral": {
+        const obj = {}
+        for (const { key, value } of node.entries) {
+          obj[key] = evalNode(value)
+        }
+        return obj
+      }
+
+      case "BinOp":
+        return evalBinOp(node)
+
+      case "UnaryOp":
+        if (node.op === "!") return !evalNode(node.expr)
+        if (node.op === "-") return -evalNode(node.expr)
+        throw new Error(`Line ${node.line}: Unknown unary operator: ${node.op}`)
+
+      case "Call":
+        return evalCall(node)
+
+      case "Display": {
+        const value = node.args.length > 0 ? evalNode(node.args[0]) : null
+        const outputType = node.args.length > 1 ? evalNode(node.args[1]) : null
         displayOutputs.push({ value, outputType })
-        break
+        return value
       }
 
-      case "assign": {
-        const args = parseArgList(parsed.argsStr, context)
-        const result = executeCall(parsed.namespace, parsed.funcName, args)
-        context.set(parsed.varName, result)
-        lastResult = result
-        break
+      case "Pipe": {
+        const leftVal = evalNode(node.left)
+        // Prepend leftVal to the right call's args
+        const right = node.right
+        if (right.type === "Call") {
+          const args = right.args.map(evalNode)
+          args.unshift(leftVal)
+          return executeWasmCall(right.namespace, right.func, args, right.line)
+        }
+        if (right.type === "Display") {
+          const outputType = right.args.length > 0 ? evalNode(right.args[0]) : null
+          displayOutputs.push({ value: leftVal, outputType })
+          return leftVal
+        }
+        throw new Error(`Line ${right.line}: Pipe target must be a function call`)
       }
 
-      case "assign_literal": {
-        const args = parseArgList(parsed.expr, context)
-        const value = args[0]
-        context.set(parsed.varName, value)
+      default:
+        throw new Error(`Line ${node.line || "?"}: Unknown node type: ${node.type}`)
+    }
+  }
+
+  function evalBinOp(node) {
+    // Short-circuit for && and ||
+    if (node.op === "&&") {
+      const l = evalNode(node.left)
+      return l ? evalNode(node.right) : l
+    }
+    if (node.op === "||") {
+      const l = evalNode(node.left)
+      return l ? l : evalNode(node.right)
+    }
+
+    const l = evalNode(node.left)
+    const r = evalNode(node.right)
+    switch (node.op) {
+      case "+": return l + r
+      case "-": return l - r
+      case "*": return l * r
+      case "/":
+        if (r === 0) throw new Error(`Line ${node.line}: Division by zero`)
+        return l / r
+      case "%": return l % r
+      case "==": return l === r
+      case "!=": return l !== r
+      case "<": return l < r
+      case ">": return l > r
+      case "<=": return l <= r
+      case ">=": return l >= r
+      default: throw new Error(`Line ${node.line}: Unknown operator: ${node.op}`)
+    }
+  }
+
+  function evalCall(node) {
+    const args = node.args.map(evalNode)
+    return executeWasmCall(node.namespace, node.func, args, node.line)
+  }
+
+  function executeWasmCall(namespace, funcName, args, line) {
+    if (!namespace) {
+      throw new Error(`Line ${line}: Unknown function: ${funcName}`)
+    }
+    const namespaces = getNamespaces()
+    const ns = namespaces[namespace]
+    if (!ns) {
+      throw new Error(`Line ${line}: Unknown namespace: ${namespace}`)
+    }
+    const fn = ns[funcName]
+    if (typeof fn !== "function") {
+      throw new Error(`Line ${line}: Unknown function: ${namespace}.${funcName}`)
+    }
+    return fn(...args)
+  }
+
+  function execStatement(stmt) {
+    switch (stmt.type) {
+      case "Assignment": {
+        const value = evalNode(stmt.expr)
+        context.set(stmt.name, value)
         lastResult = value
         break
       }
 
-      case "call": {
-        const args = parseArgList(parsed.argsStr, context)
-        lastResult = executeCall(parsed.namespace, parsed.funcName, args)
+      case "ExprStatement": {
+        const value = evalNode(stmt.expr)
+        lastResult = value
         break
       }
 
-      case "expression": {
-        // Try to resolve as variable reference
-        const trimmed = parsed.expr.trim()
-        if (context.has(trimmed)) {
-          lastResult = context.get(trimmed)
+      case "IfElse": {
+        const cond = evalNode(stmt.condition)
+        const branch = cond ? stmt.then : (stmt.else || [])
+        for (const s of branch) execStatement(s)
+        break
+      }
+
+      case "ForLoop": {
+        const iterable = evalNode(stmt.iterable)
+        if (!Array.isArray(iterable)) {
+          throw new Error(`Line ${stmt.line}: for..in requires an array, got ${typeof iterable}`)
+        }
+        for (const item of iterable) {
+          context.set(stmt.variable, item)
+          for (const s of stmt.body) execStatement(s)
         }
         break
       }
+
+      default:
+        throw new Error(`Line ${stmt.line || "?"}: Unknown statement type: ${stmt.type}`)
     }
+  }
+
+  for (const stmt of ast.statements) {
+    execStatement(stmt)
   }
 
   return { lastResult, displayOutputs }
@@ -351,7 +771,12 @@ self.onmessage = async function (e) {
     const context = new Map(contextEntries || [])
 
     const startTime = performance.now()
-    const { lastResult, displayOutputs } = executeCode(code, context)
+
+    // Tokenize -> Parse -> Interpret
+    const tokens = tokenize(code)
+    const ast = parse(tokens)
+    const { lastResult, displayOutputs } = interpret(ast, context)
+
     const elapsed = Math.round(performance.now() - startTime)
 
     // Build output: prefer display() outputs, fall back to last result
@@ -374,6 +799,7 @@ self.onmessage = async function (e) {
       context: Array.from(context.entries()),
     })
   } catch (err) {
+    // Include line number from error message if available
     self.postMessage({
       type: "error",
       cellId,

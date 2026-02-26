@@ -12,6 +12,7 @@ defmodule Cyanea.Application do
       {Phoenix.PubSub, name: Cyanea.PubSub},
       {Finch, name: Cyanea.Finch},
       {Oban, Application.fetch_env!(:cyanea, Oban)},
+      CyaneaWeb.NotebookPresence,
       CyaneaWeb.Endpoint
     ]
 

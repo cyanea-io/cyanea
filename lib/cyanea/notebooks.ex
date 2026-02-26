@@ -4,7 +4,7 @@ defmodule Cyanea.Notebooks do
   """
   import Ecto.Query
 
-  alias Cyanea.Notebooks.Notebook
+  alias Cyanea.Notebooks.{Notebook, NotebookVersion, ExecutionResult}
   alias Cyanea.Repo
 
   ## Listing
@@ -172,10 +172,17 @@ defmodule Cyanea.Notebooks do
   def get_cells(%Notebook{}), do: []
 
   @doc """
-  Returns true if the cell is an executable cyanea code cell.
+  Returns true if the cell is an executable code cell (cyanea or elixir).
   """
   def executable_cell?(%{"type" => "code", "language" => "cyanea"}), do: true
+  def executable_cell?(%{"type" => "code", "language" => "elixir"}), do: true
   def executable_cell?(_), do: false
+
+  @doc """
+  Returns true if the cell executes server-side (elixir).
+  """
+  def server_executable_cell?(%{"type" => "code", "language" => "elixir"}), do: true
+  def server_executable_cell?(_), do: false
 
   defp reindex_positions(cells) do
     cells
@@ -185,5 +192,140 @@ defmodule Cyanea.Notebooks do
 
   defp stringify_keys(map) do
     Map.new(map, fn {k, v} -> {to_string(k), v} end)
+  end
+
+  ## Versioning
+
+  @doc """
+  Creates a version snapshot of the notebook's current content.
+
+  Uses Ecto.Multi to atomically determine the next version number.
+  Deduplicates by content_hash — returns existing version if hash matches latest.
+  """
+  def create_version(%Notebook{} = notebook, trigger, author_id \\ nil, label \\ nil) do
+    content = notebook.content || %{}
+    content_hash = content_hash(content)
+
+    Ecto.Multi.new()
+    |> Ecto.Multi.run(:next_number, fn repo, _ ->
+      result =
+        from(v in NotebookVersion,
+          where: v.notebook_id == ^notebook.id,
+          select: coalesce(max(v.number), 0) + 1
+        )
+        |> repo.one()
+
+      {:ok, result}
+    end)
+    |> Ecto.Multi.run(:check_dedup, fn repo, %{next_number: next_number} ->
+      # If the latest version has the same content hash, skip creation
+      latest =
+        from(v in NotebookVersion,
+          where: v.notebook_id == ^notebook.id and v.number == ^(next_number - 1) and v.content_hash == ^content_hash
+        )
+        |> repo.one()
+
+      {:ok, latest}
+    end)
+    |> Ecto.Multi.run(:version, fn repo, %{next_number: next_number, check_dedup: dedup} ->
+      if dedup do
+        {:ok, dedup}
+      else
+        %NotebookVersion{}
+        |> NotebookVersion.changeset(%{
+          number: next_number,
+          label: label,
+          content: content,
+          content_hash: content_hash,
+          trigger: trigger,
+          notebook_id: notebook.id,
+          author_id: author_id,
+          created_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        })
+        |> repo.insert()
+      end
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{version: version}} -> {:ok, version}
+      {:error, _step, changeset, _changes} -> {:error, changeset}
+    end
+  end
+
+  @doc "Lists versions for a notebook, descending by number."
+  def list_versions(notebook_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 50)
+
+    from(v in NotebookVersion,
+      where: v.notebook_id == ^notebook_id,
+      order_by: [desc: v.number],
+      limit: ^limit,
+      preload: [:author]
+    )
+    |> Repo.all()
+  end
+
+  @doc "Gets a single version by ID."
+  def get_version!(id), do: Repo.get!(NotebookVersion, id) |> Repo.preload(:author)
+
+  @doc "Gets the latest version for a notebook."
+  def get_latest_version(notebook_id) do
+    from(v in NotebookVersion,
+      where: v.notebook_id == ^notebook_id,
+      order_by: [desc: v.number],
+      limit: 1
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Restores a notebook to a previous version's content.
+
+  Creates a "Before restore" version of current content, then updates the notebook.
+  """
+  def restore_version(%Notebook{} = notebook, version_id, author_id \\ nil) do
+    version = get_version!(version_id)
+
+    Ecto.Multi.new()
+    |> Ecto.Multi.run(:snapshot, fn _repo, _ ->
+      create_version(notebook, "manual", author_id, "Before restore")
+    end)
+    |> Ecto.Multi.run(:restore, fn _repo, _ ->
+      update_notebook(notebook, %{content: version.content})
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{restore: notebook}} -> {:ok, notebook}
+      {:error, _step, changeset, _changes} -> {:error, changeset}
+    end
+  end
+
+  defp content_hash(content) do
+    content
+    |> Jason.encode!()
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.encode16(case: :lower)
+  end
+
+  ## Execution Results
+
+  @doc "Upserts an execution result for a cell (one result per notebook+cell)."
+  def upsert_execution_result(attrs) do
+    %ExecutionResult{}
+    |> ExecutionResult.changeset(attrs)
+    |> Repo.insert(
+      on_conflict: {:replace, [:status, :output, :user_id]},
+      conflict_target: [:notebook_id, :cell_id]
+    )
+  end
+
+  @doc "Loads all execution results for a notebook as a map of cell_id => output."
+  def load_execution_results(notebook_id) do
+    from(r in ExecutionResult,
+      where: r.notebook_id == ^notebook_id,
+      select: {r.cell_id, r.output}
+    )
+    |> Repo.all()
+    |> Map.new()
   end
 end

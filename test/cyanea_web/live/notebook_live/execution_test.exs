@@ -33,9 +33,16 @@ defmodule CyaneaWeb.NotebookLive.ExecutionTest do
             %{
               "id" => "elixir-cell",
               "type" => "code",
-              "source" => "IO.puts(\"hi\")",
+              "source" => "Enum.sum(1..10)",
               "language" => "elixir",
               "position" => 2
+            },
+            %{
+              "id" => "python-cell",
+              "type" => "code",
+              "source" => "print('hi')",
+              "language" => "python",
+              "position" => 3
             }
           ]
         }
@@ -45,7 +52,7 @@ defmodule CyaneaWeb.NotebookLive.ExecutionTest do
   end
 
   describe "execution assigns" do
-    test "mounts with empty cell_outputs and running_cells", %{
+    test "mounts with empty running_cells", %{
       conn: conn,
       user: user,
       space: space
@@ -68,11 +75,21 @@ defmodule CyaneaWeb.NotebookLive.ExecutionTest do
       assert html =~ "Running..."
     end
 
-    test "does not execute non-cyanea cells", %{conn: conn, user: user, space: space} do
+    test "enqueues server execution for elixir cells", %{conn: conn, user: user, space: space} do
       {:ok, view, _html} =
         live(conn, ~p"/#{user.username}/#{space.slug}/notebooks/execution-test")
 
       html = render_click(view, "run-cell", %{"cell-id" => "elixir-cell"})
+      # Should show running state for elixir cells now
+      assert html =~ "Running..."
+    end
+
+    test "shows coming soon for python cells", %{conn: conn, user: user, space: space} do
+      {:ok, view, _html} =
+        live(conn, ~p"/#{user.username}/#{space.slug}/notebooks/execution-test")
+
+      html = render_click(view, "run-cell", %{"cell-id" => "python-cell"})
+      # Python is not executable, so no running state
       refute html =~ "Running..."
     end
   end
@@ -118,7 +135,7 @@ defmodule CyaneaWeb.NotebookLive.ExecutionTest do
         live(conn, ~p"/#{user.username}/#{space.slug}/notebooks/execution-test")
 
       html = render_click(view, "run-all", %{})
-      # Should show running state for cyanea cells
+      # Should show running state for both cyanea and elixir cells
       assert html =~ "Running..."
     end
   end
@@ -135,7 +152,7 @@ defmodule CyaneaWeb.NotebookLive.ExecutionTest do
       assert html =~ "Run All"
     end
 
-    test "shows Server only badge for non-cyanea code cells", %{
+    test "shows Coming soon badge for python cells", %{
       conn: conn,
       user: user,
       space: space
@@ -143,7 +160,7 @@ defmodule CyaneaWeb.NotebookLive.ExecutionTest do
       {:ok, _view, html} =
         live(conn, ~p"/#{user.username}/#{space.slug}/notebooks/execution-test")
 
-      assert html =~ "Server only"
+      assert html =~ "Coming soon"
     end
 
     test "shows CYANEA label for cyanea cells", %{conn: conn, user: user, space: space} do
@@ -151,6 +168,13 @@ defmodule CyaneaWeb.NotebookLive.ExecutionTest do
         live(conn, ~p"/#{user.username}/#{space.slug}/notebooks/execution-test")
 
       assert html =~ "CYANEA"
+    end
+
+    test "shows ELIXIR label for elixir cells", %{conn: conn, user: user, space: space} do
+      {:ok, _view, html} =
+        live(conn, ~p"/#{user.username}/#{space.slug}/notebooks/execution-test")
+
+      assert html =~ "ELIXIR"
     end
 
     test "new code cells default to cyanea language", %{conn: conn, user: user, space: space} do
@@ -161,6 +185,14 @@ defmodule CyaneaWeb.NotebookLive.ExecutionTest do
       # Should show CYANEA (the new default)
       # Count occurrences - should have 2 now (original + new)
       assert length(Regex.scan(~r/CYANEA/, html)) >= 2
+    end
+
+    test "shows Checkpoint and Versions buttons", %{conn: conn, user: user, space: space} do
+      {:ok, _view, html} =
+        live(conn, ~p"/#{user.username}/#{space.slug}/notebooks/execution-test")
+
+      assert html =~ "Checkpoint"
+      assert html =~ "Versions"
     end
   end
 end

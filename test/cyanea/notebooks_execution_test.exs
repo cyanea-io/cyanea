@@ -8,8 +8,11 @@ defmodule Cyanea.Notebooks.ExecutionTest do
       assert Execution.executable?("cyanea")
     end
 
+    test "elixir is executable" do
+      assert Execution.executable?("elixir")
+    end
+
     test "other languages are not executable" do
-      refute Execution.executable?("elixir")
       refute Execution.executable?("python")
       refute Execution.executable?("r")
       refute Execution.executable?("bash")
@@ -22,9 +25,14 @@ defmodule Cyanea.Notebooks.ExecutionTest do
       assert Execution.execution_target("cyanea") == :wasm
     end
 
-    test "other languages target server_future" do
-      assert Execution.execution_target("elixir") == :server_future
-      assert Execution.execution_target("python") == :server_future
+    test "elixir targets server" do
+      assert Execution.execution_target("elixir") == :server
+    end
+
+    test "other languages target server_coming_soon" do
+      assert Execution.execution_target("python") == :server_coming_soon
+      assert Execution.execution_target("r") == :server_coming_soon
+      assert Execution.execution_target("bash") == :server_coming_soon
     end
   end
 
@@ -43,6 +51,12 @@ defmodule Cyanea.Notebooks.ExecutionTest do
   describe "wasm_languages/0" do
     test "returns only wasm-executable languages" do
       assert Execution.wasm_languages() == ["cyanea"]
+    end
+  end
+
+  describe "server_languages/0" do
+    test "returns server-executable languages" do
+      assert Execution.server_languages() == ["elixir"]
     end
   end
 end

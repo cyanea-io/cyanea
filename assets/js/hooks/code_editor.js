@@ -17,6 +17,7 @@ const CodeEditor = {
   mounted() {
     this._cellId = this.el.dataset.cellId
     this._updateTimer = null
+    this._suppressUpdate = false
 
     const source = this.el.dataset.source || ""
 
@@ -33,7 +34,7 @@ const CodeEditor = {
         },
       ]),
       EditorView.updateListener.of((update) => {
-        if (update.docChanged) {
+        if (update.docChanged && !this._suppressUpdate) {
           this._scheduleUpdate()
         }
       }),
@@ -51,6 +52,19 @@ const CodeEditor = {
     this._view = new EditorView({
       state: EditorState.create({ doc: source, extensions }),
       parent: this.el,
+    })
+
+    // Handle remote cell updates from collaboration
+    this.handleEvent("remote-cell-update", ({ cell_id, source }) => {
+      if (cell_id !== this._cellId) return
+      const currentDoc = this._view.state.doc.toString()
+      if (currentDoc === source) return
+
+      this._suppressUpdate = true
+      this._view.dispatch({
+        changes: { from: 0, to: currentDoc.length, insert: source },
+      })
+      this._suppressUpdate = false
     })
   },
 
