@@ -19,6 +19,9 @@ defmodule Cyanea.Federation.Manifest do
     field :signature, :string
     field :signer_key_id, :string
     field :payload, :map, default: %{}
+    field :status, :string, default: "published"
+    field :retracted_reason, :string
+    field :revision_number, :integer
 
     belongs_to :space, Cyanea.Spaces.Space
     belongs_to :node, Cyanea.Federation.Node
@@ -35,10 +38,13 @@ defmodule Cyanea.Federation.Manifest do
       :signature,
       :signer_key_id,
       :payload,
+      :status,
+      :retracted_reason,
+      :revision_number,
       :space_id,
       :node_id
     ])
-    |> validate_required([:global_id, :content_hash, :space_id])
+    |> validate_required([:global_id, :content_hash])
     |> unique_constraint(:global_id)
   end
 end

@@ -32,6 +32,19 @@ defmodule CyaneaWeb.Router do
     post "/stripe", StripeWebhookController, :create
   end
 
+  # Federation API (node-to-node communication)
+  scope "/api/federation", CyaneaWeb do
+    pipe_through :api
+
+    get "/health", FederationController, :health
+    get "/manifests", FederationController, :list_manifests
+    get "/manifests/:global_id", FederationController, :show_manifest
+    get "/revisions/:space_id", FederationController, :list_revisions
+    get "/blobs/:space_id", FederationController, :list_blob_hashes
+    post "/sync/push", FederationController, :receive_push
+    post "/register", FederationController, :register_remote
+  end
+
   # Session controller routes (must be outside LiveView scopes)
   scope "/auth", CyaneaWeb do
     pipe_through :browser
@@ -84,6 +97,10 @@ defmodule CyaneaWeb.Router do
       # Billing
       live "/settings/billing", BillingLive, :index
       live "/organizations/:slug/settings/billing", OrganizationBillingLive, :index
+
+      # Federation admin
+      live "/federation", FederationLive.Dashboard, :index
+      live "/federation/nodes/:id", FederationLive.NodeShow, :show
 
       # Notifications
       live "/notifications", NotificationLive.Index, :index

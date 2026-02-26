@@ -53,13 +53,16 @@ config :cyanea, Oban,
     uploads: 5,
     analysis: 3,
     exports: 2,
-    compliance: 5
+    compliance: 5,
+    federation: 5
   ],
   plugins: [
     Oban.Plugins.Pruner,
     {Oban.Plugins.Cron,
      crontab: [
-       {"0 * * * *", Cyanea.Workers.StorageRecalcWorker}
+       {"0 * * * *", Cyanea.Workers.StorageRecalcWorker},
+       {"*/15 * * * *", Cyanea.Workers.NodeHealthWorker},
+       {"*/5 * * * *", Cyanea.Workers.SyncRetryWorker}
      ]}
   ]
 

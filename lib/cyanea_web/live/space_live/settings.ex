@@ -126,6 +126,21 @@ defmodule CyaneaWeb.SpaceLive.Settings do
             ]}
           />
 
+          <.input
+            :if={@space.visibility == "public"}
+            field={@form[:federation_policy]}
+            type="select"
+            label="Federation policy"
+            options={[
+              {"None — Not published to the network", "none"},
+              {"Selective — Choose what to share", "selective"},
+              {"Full — Share everything", "full"}
+            ]}
+          />
+          <p :if={@space.visibility == "public"} class="-mt-2 text-sm text-slate-500">
+            Controls whether this space is shared across the federated Cyanea network.
+          </p>
+
           <:actions>
             <.link
               navigate={~p"/#{@owner_name}/#{@space.slug}"}

@@ -6,6 +6,7 @@ defmodule CyaneaWeb.SpaceLive.Show do
   alias Cyanea.Activity
   alias Cyanea.Blobs
   alias Cyanea.Datasets
+  alias Cyanea.Federation
   alias Cyanea.Notebooks
   alias Cyanea.Notifications
   alias Cyanea.Protocols
@@ -42,6 +43,7 @@ defmodule CyaneaWeb.SpaceLive.Show do
         forked_from = load_forked_from(space)
 
         read_only = Spaces.read_only?(space)
+        published = Federation.get_active_manifest(space.id) != nil
 
         socket =
           socket
@@ -51,6 +53,7 @@ defmodule CyaneaWeb.SpaceLive.Show do
             owner_name: owner_name,
             is_owner: is_owner,
             read_only: read_only,
+            published: published,
             files: files,
             notebooks: notebooks,
             protocols: protocols,
@@ -168,6 +171,38 @@ defmodule CyaneaWeb.SpaceLive.Show do
 
       {:error, _} ->
         {:noreply, socket}
+    end
+  end
+
+  def handle_event("publish", _params, socket) do
+    space = socket.assigns.space
+
+    case Federation.publish_space(space) do
+      {:ok, _manifest} ->
+        space = Spaces.get_space!(space.id)
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Space published to the federation network.")
+         |> assign(space: space, published: true)}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to publish space. Please try again.")}
+    end
+  end
+
+  def handle_event("unpublish", _params, socket) do
+    space = socket.assigns.space
+
+    case Federation.unpublish_space(space) do
+      {:ok, space} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Space unpublished from the federation network.")
+         |> assign(space: space, published: false)}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to unpublish space.")}
     end
   end
 
@@ -289,6 +324,28 @@ defmodule CyaneaWeb.SpaceLive.Show do
                 <.icon name="hero-arrow-path-rounded-square" class="h-4 w-4" />
                 <%= @space.fork_count %>
               </span>
+            <% end %>
+            <%!-- Publish/Unpublish button (owner, public spaces only) --%>
+            <%= if @is_owner && @space.visibility == "public" do %>
+              <%= if @published do %>
+                <button
+                  phx-click="unpublish"
+                  data-confirm="Unpublish this space from the federation network?"
+                  class="flex items-center gap-1 rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-sm text-green-700 dark:border-green-600 dark:bg-green-900/20 dark:text-green-400"
+                >
+                  <.icon name="hero-globe-alt" class="h-4 w-4" />
+                  Published
+                </button>
+              <% else %>
+                <button
+                  phx-click="publish"
+                  data-confirm="Publish this space to the federation network?"
+                  class="flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                >
+                  <.icon name="hero-globe-alt" class="h-4 w-4" />
+                  Publish
+                </button>
+              <% end %>
             <% end %>
             <.link
               :if={@is_owner}

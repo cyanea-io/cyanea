@@ -15,6 +15,7 @@ defmodule Cyanea.Spaces.Space do
   @visibility ~w(public private)
   @licenses ~w(cc-by-4.0 cc-by-sa-4.0 cc0-1.0 mit apache-2.0 proprietary)
   @owner_types ~w(user organization)
+  @federation_policies ~w(none selective full)
 
   schema "spaces" do
     field :name, :string
@@ -39,6 +40,7 @@ defmodule Cyanea.Spaces.Space do
 
     # Federation
     field :global_id, :string
+    field :federation_policy, :string, default: "none"
 
     # Forking
     belongs_to :forked_from, __MODULE__
@@ -76,6 +78,7 @@ defmodule Cyanea.Spaces.Space do
       :tags,
       :ontology_terms,
       :global_id,
+      :federation_policy,
       :current_revision_id
     ])
     |> validate_required([:name, :slug, :owner_type, :owner_id])
@@ -88,6 +91,7 @@ defmodule Cyanea.Spaces.Space do
     |> validate_inclusion(:visibility, @visibility)
     |> validate_inclusion(:license, @licenses ++ [nil])
     |> validate_inclusion(:owner_type, @owner_types)
+    |> validate_inclusion(:federation_policy, @federation_policies)
     |> unique_constraint([:slug, :owner_type, :owner_id], name: :spaces_slug_owner_index)
     |> unique_constraint(:global_id)
   end
@@ -95,4 +99,5 @@ defmodule Cyanea.Spaces.Space do
   def visibilities, do: @visibility
   def licenses, do: @licenses
   def owner_types, do: @owner_types
+  def federation_policies, do: @federation_policies
 end

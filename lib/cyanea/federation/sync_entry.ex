@@ -23,6 +23,10 @@ defmodule Cyanea.Federation.SyncEntry do
     field :error_message, :string
     field :inserted_at, :utc_datetime
     field :completed_at, :utc_datetime
+    field :retries, :integer, default: 0
+    field :max_retries, :integer, default: 5
+    field :next_retry_at, :utc_datetime
+    field :bytes_transferred, :integer, default: 0
 
     belongs_to :node, Cyanea.Federation.Node
   end
@@ -37,7 +41,11 @@ defmodule Cyanea.Federation.SyncEntry do
       :status,
       :error_message,
       :node_id,
-      :completed_at
+      :completed_at,
+      :retries,
+      :max_retries,
+      :next_retry_at,
+      :bytes_transferred
     ])
     |> validate_required([:direction, :resource_type, :resource_id, :node_id])
     |> validate_inclusion(:direction, @directions)
