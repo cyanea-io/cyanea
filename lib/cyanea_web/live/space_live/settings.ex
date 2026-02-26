@@ -1,6 +1,7 @@
 defmodule CyaneaWeb.SpaceLive.Settings do
   use CyaneaWeb, :live_view
 
+  alias Cyanea.Billing
   alias Cyanea.Spaces
   alias Cyanea.Spaces.Space
 
@@ -24,13 +25,16 @@ defmodule CyaneaWeb.SpaceLive.Settings do
 
       true ->
         changeset = Space.changeset(space, %{})
+        owner = load_owner(space)
+        can_go_private = owner != nil && Billing.can_have_private_spaces?(owner)
 
         {:ok,
          assign(socket,
            page_title: "Settings — #{space.name}",
            space: space,
            owner_name: owner_name,
-           form: to_form(changeset)
+           form: to_form(changeset),
+           can_go_private: can_go_private
          )}
     end
   end
@@ -54,6 +58,10 @@ defmodule CyaneaWeb.SpaceLive.Settings do
          socket
          |> put_flash(:info, "Space updated successfully.")
          |> push_navigate(to: ~p"/#{owner_name}/#{space.slug}")}
+
+      {:error, :pro_required} ->
+        {:noreply,
+         put_flash(socket, :error, "Private visibility requires a Pro plan. Upgrade to unlock private spaces.")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign(socket, form: to_form(changeset))}
@@ -95,6 +103,13 @@ defmodule CyaneaWeb.SpaceLive.Settings do
             label="Visibility"
             options={[{"Public", "public"}, {"Private", "private"}]}
           />
+
+          <p :if={!@can_go_private && @space.visibility != "private"} class="-mt-2 text-sm text-slate-500">
+            Private visibility requires a Pro plan.
+            <.link navigate={~p"/settings/billing"} class="font-medium text-primary hover:underline">
+              Upgrade to Pro
+            </.link>
+          </p>
 
           <.input
             field={@form[:license]}
@@ -143,4 +158,12 @@ defmodule CyaneaWeb.SpaceLive.Settings do
     </div>
     """
   end
+
+  defp load_owner(%{owner_type: "user", owner_id: id}),
+    do: Cyanea.Repo.get(Cyanea.Accounts.User, id)
+
+  defp load_owner(%{owner_type: "organization", owner_id: id}),
+    do: Cyanea.Repo.get(Cyanea.Organizations.Organization, id)
+
+  defp load_owner(_), do: nil
 end

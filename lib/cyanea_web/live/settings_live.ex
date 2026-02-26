@@ -89,6 +89,27 @@ defmodule CyaneaWeb.SettingsLive do
         </.simple_form>
       </div>
 
+      <%!-- Billing Section --%>
+      <div class="mt-8 rounded-xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Subscription</h3>
+            <p class="mt-1 text-sm text-slate-500">
+              You're on the
+              <span :if={@current_user.plan == "free"} class="font-medium text-slate-700 dark:text-slate-300">Free</span>
+              <span :if={@current_user.plan == "pro"} class="font-medium text-primary">Pro</span>
+              plan.
+            </p>
+          </div>
+          <.link
+            navigate={~p"/settings/billing"}
+            class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+          >
+            Manage billing
+          </.link>
+        </div>
+      </div>
+
       <%!-- ORCID Section --%>
       <div class="mt-8 rounded-xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-700 dark:bg-slate-800">
         <h3 class="text-lg font-semibold text-slate-900 dark:text-white">ORCID iD</h3>

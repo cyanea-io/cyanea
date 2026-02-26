@@ -137,6 +137,29 @@ defmodule Cyanea.Blobs do
     end
   end
 
+  ## Quota-Aware Creation
+
+  @doc """
+  Creates a blob with storage quota check.
+
+  Checks the owner's storage quota before uploading, and increments the
+  storage cache after success. Returns `{:error, :storage_quota_exceeded}`
+  if the upload would exceed the quota.
+  """
+  def create_blob_with_quota_check(binary, owner, opts \\ []) when is_binary(binary) do
+    upload_size = byte_size(binary)
+
+    with :ok <- Cyanea.Billing.check_storage_quota(owner, upload_size),
+         {:ok, blob} <- create_blob_from_binary(binary, opts) do
+      {owner_type, owner_id} = owner_type_and_id(owner)
+      Cyanea.Billing.increment_storage_cache(owner_type, owner_id, upload_size)
+      {:ok, blob}
+    end
+  end
+
+  defp owner_type_and_id(%Cyanea.Accounts.User{id: id}), do: {"user", id}
+  defp owner_type_and_id(%Cyanea.Organizations.Organization{id: id}), do: {"organization", id}
+
   ## Internal
 
   @doc """

@@ -7,9 +7,11 @@ defmodule Cyanea.Spaces do
   """
   import Ecto.Query
 
+  alias Cyanea.Accounts.User
+  alias Cyanea.Billing
   alias Cyanea.Datasets
   alias Cyanea.Notebooks
-  alias Cyanea.Organizations.Membership
+  alias Cyanea.Organizations.{Membership, Organization}
   alias Cyanea.Protocols
   alias Cyanea.Repo
   alias Cyanea.Spaces.Space
@@ -122,40 +124,55 @@ defmodule Cyanea.Spaces do
 
   @doc """
   Creates a space.
+
+  Returns `{:error, :pro_required}` when a free-tier owner tries to
+  create a private space.
   """
   def create_space(attrs) do
-    %Space{}
-    |> Space.changeset(attrs)
-    |> Repo.insert()
-    |> case do
-      {:ok, space} ->
-        if space.visibility == "public", do: Cyanea.Search.index_space(space)
-        {:ok, space}
+    visibility = Map.get(attrs, :visibility) || Map.get(attrs, "visibility") || "public"
 
-      error ->
-        error
+    with :ok <- check_private_allowed(visibility, attrs) do
+      %Space{}
+      |> Space.changeset(attrs)
+      |> Repo.insert()
+      |> case do
+        {:ok, space} ->
+          if space.visibility == "public", do: Cyanea.Search.index_space(space)
+          {:ok, space}
+
+        error ->
+          error
+      end
     end
   end
 
   @doc """
   Updates a space.
+
+  Returns `{:error, :pro_required}` when a free-tier owner tries to
+  change visibility to private.
   """
   def update_space(%Space{} = space, attrs) do
-    space
-    |> Space.changeset(attrs)
-    |> Repo.update()
-    |> case do
-      {:ok, space} ->
-        if space.visibility == "public" do
-          Cyanea.Search.index_space(space)
-        else
-          Cyanea.Search.delete_space(space.id)
-        end
+    new_visibility = Map.get(attrs, :visibility) || Map.get(attrs, "visibility")
+    changing_to_private? = new_visibility == "private" && space.visibility != "private"
 
-        {:ok, space}
+    with :ok <- if(changing_to_private?, do: check_owner_pro(space), else: :ok) do
+      space
+      |> Space.changeset(attrs)
+      |> Repo.update()
+      |> case do
+        {:ok, space} ->
+          if space.visibility == "public" do
+            Cyanea.Search.index_space(space)
+          else
+            Cyanea.Search.delete_space(space.id)
+          end
 
-      error ->
-        error
+          {:ok, space}
+
+        error ->
+          error
+      end
     end
   end
 
@@ -226,6 +243,48 @@ defmodule Cyanea.Spaces do
       org -> org.slug
     end
   end
+
+  ## Billing Enforcement
+
+  @doc """
+  Returns true if a space is read-only due to the owner's subscription expiring.
+
+  A private space whose owner is on the free plan is read-only — the owner
+  can still view it but cannot push new content.
+  """
+  def read_only?(%Space{visibility: "public"}), do: false
+
+  def read_only?(%Space{visibility: "private"} = space) do
+    owner = get_owner(space)
+    owner != nil && !Billing.pro?(owner)
+  end
+
+  defp check_private_allowed("private", attrs) do
+    owner_type = Map.get(attrs, :owner_type) || Map.get(attrs, "owner_type")
+    owner_id = Map.get(attrs, :owner_id) || Map.get(attrs, "owner_id")
+
+    case load_owner(owner_type, owner_id) do
+      nil -> :ok
+      owner -> if Billing.can_have_private_spaces?(owner), do: :ok, else: {:error, :pro_required}
+    end
+  end
+
+  defp check_private_allowed(_visibility, _attrs), do: :ok
+
+  defp check_owner_pro(%Space{} = space) do
+    case get_owner(space) do
+      nil -> :ok
+      owner -> if Billing.pro?(owner), do: :ok, else: {:error, :pro_required}
+    end
+  end
+
+  defp get_owner(%Space{owner_type: owner_type, owner_id: owner_id}) do
+    load_owner(owner_type, owner_id)
+  end
+
+  defp load_owner("user", id), do: Repo.get(User, id)
+  defp load_owner("organization", id), do: Repo.get(Organization, id)
+  defp load_owner(_, _), do: nil
 
   ## Forking
 

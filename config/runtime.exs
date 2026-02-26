@@ -70,4 +70,13 @@ if config_env() == :prod do
   config :ueberauth, Ueberauth.Strategy.Orcid.OAuth,
     client_id: System.get_env("ORCID_CLIENT_ID"),
     client_secret: System.get_env("ORCID_CLIENT_SECRET")
+
+  # Stripe configuration
+  config :stripity_stripe,
+    api_key: System.get_env("STRIPE_SECRET_KEY"),
+    signing_secret: System.get_env("STRIPE_WEBHOOK_SECRET")
+
+  config :cyanea, :stripe_prices,
+    pro_monthly_user: System.get_env("STRIPE_PRICE_PRO_USER"),
+    pro_monthly_org: System.get_env("STRIPE_PRICE_PRO_ORG")
 end

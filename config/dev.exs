@@ -69,5 +69,14 @@ config :meilisearch,
 
 config :cyanea, :search_enabled, true
 
+# Stripe test mode
+config :stripity_stripe,
+  api_key: System.get_env("STRIPE_SECRET_KEY") || "sk_test_placeholder",
+  signing_secret: System.get_env("STRIPE_WEBHOOK_SECRET") || "whsec_placeholder"
+
+config :cyanea, :stripe_prices,
+  pro_monthly_user: System.get_env("STRIPE_PRICE_PRO_USER") || "price_test_pro_user",
+  pro_monthly_org: System.get_env("STRIPE_PRICE_PRO_ORG") || "price_test_pro_org"
+
 # Disable Oban in test
 config :cyanea, Oban, testing: :inline

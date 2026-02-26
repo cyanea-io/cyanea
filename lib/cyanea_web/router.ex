@@ -25,6 +25,13 @@ defmodule CyaneaWeb.Router do
     get "/ready", HealthController, :ready
   end
 
+  # Stripe webhooks (API pipeline, no CSRF)
+  scope "/webhooks", CyaneaWeb do
+    pipe_through :api
+
+    post "/stripe", StripeWebhookController, :create
+  end
+
   # Session controller routes (must be outside LiveView scopes)
   scope "/auth", CyaneaWeb do
     pipe_through :browser
@@ -73,6 +80,10 @@ defmodule CyaneaWeb.Router do
 
       # Discussions (create requires auth)
       live "/:username/:slug/discussions/new", DiscussionLive.New, :new
+
+      # Billing
+      live "/settings/billing", BillingLive, :index
+      live "/organizations/:slug/settings/billing", OrganizationBillingLive, :index
 
       # Notifications
       live "/notifications", NotificationLive.Index, :index

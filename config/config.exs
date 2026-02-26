@@ -57,7 +57,10 @@ config :cyanea, Oban,
   ],
   plugins: [
     Oban.Plugins.Pruner,
-    {Oban.Plugins.Cron, crontab: []}
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"0 * * * *", Cyanea.Workers.StorageRecalcWorker}
+     ]}
   ]
 
 # S3 bucket
@@ -73,6 +76,11 @@ config :ueberauth, Ueberauth,
 config :cyanea, Cyanea.Guardian,
   issuer: "cyanea",
   secret_key: "dev_secret_key_change_in_prod"
+
+# Stripe configuration
+config :stripity_stripe,
+  api_key: "sk_test_placeholder",
+  signing_secret: "whsec_placeholder"
 
 # Import environment specific config
 import_config "#{config_env()}.exs"

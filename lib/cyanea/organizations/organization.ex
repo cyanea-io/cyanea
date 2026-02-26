@@ -16,6 +16,8 @@ defmodule Cyanea.Organizations.Organization do
     field :website, :string
     field :location, :string
     field :verified, :boolean, default: false
+    field :plan, :string, default: "free"
+    field :stripe_customer_id, :string
 
     has_many :memberships, Cyanea.Organizations.Membership
     has_many :members, through: [:memberships, :user]

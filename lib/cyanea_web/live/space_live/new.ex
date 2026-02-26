@@ -1,18 +1,23 @@
 defmodule CyaneaWeb.SpaceLive.New do
   use CyaneaWeb, :live_view
 
+  alias Cyanea.Billing
   alias Cyanea.Spaces
   alias Cyanea.Spaces.Space
 
   @impl true
   def mount(_params, _session, socket) do
+    user = socket.assigns.current_user
+    can_create_private = Billing.can_have_private_spaces?(user)
+
     changeset =
       Space.changeset(%Space{}, %{visibility: "public"})
 
     {:ok,
      assign(socket,
        page_title: "New Space",
-       form: to_form(changeset)
+       form: to_form(changeset),
+       can_create_private: can_create_private
      )}
   end
 
@@ -41,6 +46,11 @@ defmodule CyaneaWeb.SpaceLive.New do
          socket
          |> put_flash(:info, "Space created successfully!")
          |> push_navigate(to: ~p"/#{user.username}/#{space.slug}")}
+
+      {:error, :pro_required} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Private spaces require a Pro plan. Upgrade to unlock private spaces.")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign(socket, form: to_form(changeset))}
@@ -82,6 +92,13 @@ defmodule CyaneaWeb.SpaceLive.New do
             label="Visibility"
             options={[{"Public", "public"}, {"Private", "private"}]}
           />
+
+          <p :if={!@can_create_private} class="-mt-2 text-sm text-slate-500">
+            Private spaces require a Pro plan.
+            <.link navigate={~p"/settings/billing"} class="font-medium text-primary hover:underline">
+              Upgrade to Pro
+            </.link>
+          </p>
 
           <.input
             field={@form[:license]}

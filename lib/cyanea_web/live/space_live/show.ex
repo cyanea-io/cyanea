@@ -41,6 +41,8 @@ defmodule CyaneaWeb.SpaceLive.Show do
         # Load forked-from space info
         forked_from = load_forked_from(space)
 
+        read_only = Spaces.read_only?(space)
+
         socket =
           socket
           |> assign(
@@ -48,6 +50,7 @@ defmodule CyaneaWeb.SpaceLive.Show do
             space: space,
             owner_name: owner_name,
             is_owner: is_owner,
+            read_only: read_only,
             files: files,
             notebooks: notebooks,
             protocols: protocols,
@@ -206,6 +209,24 @@ defmodule CyaneaWeb.SpaceLive.Show do
           <:crumb><%= @space.name %></:crumb>
         </.breadcrumb>
         <.visibility_badge visibility={@space.visibility} />
+      </div>
+
+      <%!-- Read-only banner (downgraded subscription) --%>
+      <div
+        :if={@read_only}
+        class="mt-4 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-900/20"
+      >
+        <.icon name="hero-exclamation-triangle" class="h-5 w-5 text-amber-500 shrink-0" />
+        <p class="text-sm text-amber-800 dark:text-amber-200">
+          This space is read-only because the owner's Pro subscription has expired.
+          <.link
+            :if={@is_owner}
+            navigate={~p"/settings/billing"}
+            class="font-medium underline hover:text-amber-900 dark:hover:text-amber-100"
+          >
+            Upgrade to Pro
+          </.link>
+        </p>
       </div>
 
       <%!-- Forked from attribution --%>

@@ -19,6 +19,8 @@ defmodule Cyanea.Accounts.User do
     field :bio, :string
     field :affiliation, :string
     field :confirmed_at, :utc_datetime
+    field :plan, :string, default: "free"
+    field :stripe_customer_id, :string
 
     has_many :memberships, Cyanea.Organizations.Membership
     has_many :organizations, through: [:memberships, :organization]

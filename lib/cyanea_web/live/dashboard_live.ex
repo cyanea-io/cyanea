@@ -4,6 +4,7 @@ defmodule CyaneaWeb.DashboardLive do
   import CyaneaWeb.ActivityEventComponent
 
   alias Cyanea.Activity
+  alias Cyanea.Billing
   alias Cyanea.Organizations
   alias Cyanea.Spaces
 
@@ -13,13 +14,15 @@ defmodule CyaneaWeb.DashboardLive do
     spaces = Spaces.list_user_spaces(user.id)
     organizations = Organizations.list_user_organizations(user.id)
     activity_events = Activity.list_following_feed(user.id, limit: 20)
+    storage = Billing.storage_info(user)
 
     {:ok,
      assign(socket,
        page_title: "Dashboard",
        spaces: spaces,
        organizations: organizations,
-       activity_events: activity_events
+       activity_events: activity_events,
+       storage: storage
      )}
   end
 
@@ -111,6 +114,30 @@ defmodule CyaneaWeb.DashboardLive do
           </div>
         </.card>
 
+        <%!-- Storage usage --%>
+        <.card>
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Storage</h3>
+            <.link navigate={~p"/settings/billing"} class="text-xs text-primary hover:underline">
+              Manage
+            </.link>
+          </div>
+          <div class="mt-3">
+            <div class="flex items-center justify-between text-xs text-slate-500">
+              <span><%= format_storage_bytes(@storage.bytes_used) %> / <%= format_storage_bytes(@storage.quota) %></span>
+              <span><%= @storage.percentage %>%</span>
+            </div>
+            <div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+              <% bar_color = cond do
+                @storage.percentage >= 100 -> "bg-red-500"
+                @storage.percentage >= 80 -> "bg-amber-500"
+                true -> "bg-primary"
+              end %>
+              <div class={"h-full rounded-full " <> bar_color} style={"width: #{min(@storage.percentage, 100)}%"} />
+            </div>
+          </div>
+        </.card>
+
         <%!-- Activity feed --%>
         <.card>
           <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Recent activity</h3>
@@ -124,5 +151,15 @@ defmodule CyaneaWeb.DashboardLive do
       </aside>
     </div>
     """
+  end
+
+  defp format_storage_bytes(bytes) when bytes < 1_073_741_824 do
+    mb = Float.round(bytes / 1_048_576, 1)
+    "#{mb} MB"
+  end
+
+  defp format_storage_bytes(bytes) do
+    gb = Float.round(bytes / 1_073_741_824, 1)
+    "#{gb} GB"
   end
 end
