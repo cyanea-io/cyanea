@@ -43,15 +43,6 @@ config :ueberauth, Ueberauth.Strategy.Orcid.OAuth,
   client_id: "test-client-id",
   client_secret: "test-client-secret"
 
-# Stripe test config
-config :stripity_stripe,
-  api_key: "sk_test_fake_key",
-  signing_secret: "whsec_test_fake_secret"
-
-config :cyanea, :stripe_prices,
-  pro_monthly_user: "price_test_pro_user",
-  pro_monthly_org: "price_test_pro_org"
-
 # Swoosh test adapter (no emails sent, captures for assertions)
 config :cyanea, Cyanea.Mailer, adapter: Swoosh.Adapters.Test
 

@@ -81,11 +81,6 @@ config :cyanea, Cyanea.Guardian,
   issuer: "cyanea",
   secret_key: "dev_secret_key_change_in_prod"
 
-# Stripe configuration
-config :stripity_stripe,
-  api_key: "sk_test_placeholder",
-  signing_secret: "whsec_placeholder"
-
 # DataCite DOI minting (disabled by default)
 config :cyanea, :datacite,
   prefix: nil,

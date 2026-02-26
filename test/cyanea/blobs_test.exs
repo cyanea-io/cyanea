@@ -122,11 +122,10 @@ defmodule Cyanea.BlobsTest do
       assert {:ok, _blob} = Blobs.create_blob_with_quota_check(binary, user)
     end
 
-    test "returns :file_too_large for oversized upload" do
+    test "allows large files on open-source node" do
       user = user_fixture()
-      # Test the check function directly since we can't allocate 51 MB
-      assert {:error, :file_too_large} =
-               Cyanea.Billing.check_file_size(user, 51 * 1_048_576)
+      # Open-source node has no file size restrictions
+      assert :ok = Cyanea.Billing.check_file_size(user, 51 * 1_048_576)
     end
   end
 end

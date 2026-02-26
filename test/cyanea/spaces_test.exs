@@ -4,7 +4,6 @@ defmodule Cyanea.SpacesTest do
   alias Cyanea.Spaces
 
   import Cyanea.AccountsFixtures
-  import Cyanea.BillingFixtures
   import Cyanea.OrganizationsFixtures
   import Cyanea.SpacesFixtures
 
@@ -151,35 +150,23 @@ defmodule Cyanea.SpacesTest do
     end
   end
 
-  describe "billing enforcement" do
-    test "free user cannot create private space" do
+  describe "space visibility" do
+    test "any user can create private space (open-source node)" do
       user = user_fixture()
-      attrs = valid_space_attributes(%{owner_type: "user", owner_id: user.id, visibility: "private"})
-      assert {:error, :pro_required} = Spaces.create_space(attrs)
-    end
-
-    test "pro user can create private space" do
-      user = pro_user_fixture()
       attrs = valid_space_attributes(%{owner_type: "user", owner_id: user.id, visibility: "private"})
       assert {:ok, space} = Spaces.create_space(attrs)
       assert space.visibility == "private"
     end
 
-    test "free user can create public space" do
+    test "any user can create public space" do
       user = user_fixture()
       attrs = valid_space_attributes(%{owner_type: "user", owner_id: user.id, visibility: "public"})
       assert {:ok, space} = Spaces.create_space(attrs)
       assert space.visibility == "public"
     end
 
-    test "free user cannot change visibility to private" do
+    test "any user can change visibility to private" do
       user = user_fixture()
-      space = space_fixture(%{owner_type: "user", owner_id: user.id, visibility: "public"})
-      assert {:error, :pro_required} = Spaces.update_space(space, %{visibility: "private"})
-    end
-
-    test "pro user can change visibility to private" do
-      user = pro_user_fixture()
       space = space_fixture(%{owner_type: "user", owner_id: user.id, visibility: "public"})
       assert {:ok, updated} = Spaces.update_space(space, %{visibility: "private"})
       assert updated.visibility == "private"
@@ -193,17 +180,10 @@ defmodule Cyanea.SpacesTest do
       refute Spaces.read_only?(space)
     end
 
-    test "private space with pro owner is not read-only" do
-      user = pro_user_fixture()
+    test "private space is not read-only (open-source node)" do
+      user = user_fixture()
       space = space_fixture(%{owner_type: "user", owner_id: user.id, visibility: "private"})
       refute Spaces.read_only?(space)
-    end
-
-    test "private space with free owner is read-only (downgrade scenario)" do
-      user = user_fixture()
-      # Create private space directly (bypassing billing check via fixture)
-      space = space_fixture(%{owner_type: "user", owner_id: user.id, visibility: "private"})
-      assert Spaces.read_only?(space)
     end
   end
 end

@@ -62,15 +62,6 @@ if config_env() == :prod do
     client_id: System.get_env("ORCID_CLIENT_ID"),
     client_secret: System.get_env("ORCID_CLIENT_SECRET")
 
-  # Stripe configuration
-  config :stripity_stripe,
-    api_key: System.get_env("STRIPE_SECRET_KEY"),
-    signing_secret: System.get_env("STRIPE_WEBHOOK_SECRET")
-
-  config :cyanea, :stripe_prices,
-    pro_monthly_user: System.get_env("STRIPE_PRICE_PRO_USER"),
-    pro_monthly_org: System.get_env("STRIPE_PRICE_PRO_ORG")
-
   # Mailer configuration
   if smtp_host = System.get_env("SMTP_HOST") do
     config :cyanea, Cyanea.Mailer,

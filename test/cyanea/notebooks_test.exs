@@ -113,12 +113,11 @@ defmodule Cyanea.NotebooksTest do
       assert version.number == 1
     end
 
-    test "stops creating versions when free limit reached", %{space: space} do
+    test "creates unlimited versions on open-source node", %{space: space} do
       notebook = notebook_fixture(%{space_id: space.id})
 
-      # Create 20 versions (free limit)
-      for i <- 1..20 do
-        # Update notebook content to bypass dedup
+      # Create 21 versions (no limit on open-source node)
+      for i <- 1..21 do
         {:ok, updated} =
           Notebooks.update_notebook(notebook, %{
             content: %{"cells" => [%{"id" => "cell-#{i}", "type" => "code", "source" => "v#{i}", "language" => "cyanea", "position" => 0}]}
@@ -127,15 +126,14 @@ defmodule Cyanea.NotebooksTest do
         assert {:ok, _version} = Notebooks.create_version(updated, "manual")
       end
 
-      # 21st version should be silently skipped (returns latest)
+      # 21st version should succeed
       {:ok, updated} =
         Notebooks.update_notebook(notebook, %{
-          content: %{"cells" => [%{"id" => "cell-21", "type" => "code", "source" => "v21", "language" => "cyanea", "position" => 0}]}
+          content: %{"cells" => [%{"id" => "cell-22", "type" => "code", "source" => "v22", "language" => "cyanea", "position" => 0}]}
         })
 
       assert {:ok, version} = Notebooks.create_version(updated, "manual")
-      # Should return the existing version 20, not create 21
-      assert version.number == 20
+      assert version.number == 22
     end
   end
 end
