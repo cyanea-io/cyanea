@@ -138,6 +138,7 @@ defmodule Cyanea.Spaces do
       |> case do
         {:ok, space} ->
           if space.visibility == "public", do: Cyanea.Search.index_space(space)
+          Cyanea.Webhooks.dispatch_event("space.created", space, %{space_id: space.id, name: space.name})
           {:ok, space}
 
         error ->
@@ -168,6 +169,7 @@ defmodule Cyanea.Spaces do
             Cyanea.Search.delete_space(space.id)
           end
 
+          Cyanea.Webhooks.dispatch_event("space.updated", space, %{space_id: space.id, name: space.name})
           {:ok, space}
 
         error ->
@@ -181,6 +183,7 @@ defmodule Cyanea.Spaces do
   """
   def delete_space(%Space{} = space) do
     Cyanea.Search.delete_space(space.id)
+    Cyanea.Webhooks.dispatch_event("space.deleted", space, %{space_id: space.id, name: space.name})
     Repo.delete(space)
   end
 
@@ -317,6 +320,7 @@ defmodule Cyanea.Spaces do
     case Repo.transaction(multi) do
       {:ok, %{space: forked_space}} ->
         if forked_space.visibility == "public", do: Cyanea.Search.index_space(forked_space)
+        Cyanea.Webhooks.dispatch_event("space.forked", source, %{space_id: source.id, fork_id: forked_space.id})
         {:ok, forked_space}
 
       {:error, :space, changeset, _} ->

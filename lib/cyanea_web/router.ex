@@ -17,6 +17,13 @@ defmodule CyaneaWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :api_v1 do
+    plug :accepts, ["json"]
+    plug CyaneaWeb.Plugs.Cors
+    plug CyaneaWeb.Plugs.ApiAuth
+    plug CyaneaWeb.Plugs.RateLimit
+  end
+
   # Health checks (no auth, no session)
   scope "/", CyaneaWeb do
     pipe_through :api
@@ -43,6 +50,82 @@ defmodule CyaneaWeb.Router do
     get "/blobs/:space_id", FederationController, :list_blob_hashes
     post "/sync/push", FederationController, :receive_push
     post "/register", FederationController, :register_remote
+  end
+
+  # REST API v1 — public endpoints (reads + JWT issuance)
+  scope "/api/v1", CyaneaWeb.Api.V1 do
+    pipe_through :api_v1
+
+    post "/auth/token", AuthController, :create_jwt
+
+    get "/spaces", SpaceController, :index
+    get "/spaces/:id", SpaceController, :show
+
+    get "/spaces/:space_id/notebooks", NotebookController, :index
+    get "/spaces/:space_id/notebooks/:id", NotebookController, :show
+
+    get "/spaces/:space_id/protocols", ProtocolController, :index
+    get "/spaces/:space_id/protocols/:id", ProtocolController, :show
+
+    get "/spaces/:space_id/datasets", DatasetController, :index
+    get "/spaces/:space_id/datasets/:id", DatasetController, :show
+
+    get "/users/:username", UserController, :show
+    get "/users/:username/spaces", UserController, :spaces
+
+    get "/orgs/:slug", OrganizationController, :show
+    get "/orgs/:slug/spaces", OrganizationController, :spaces
+    get "/orgs/:slug/members", OrganizationController, :members
+
+    get "/search", SearchController, :search
+  end
+
+  # REST API v1 — authenticated endpoints (writes + management)
+  scope "/api/v1", CyaneaWeb.Api.V1 do
+    pipe_through [:api_v1, CyaneaWeb.Plugs.RequireApiAuth]
+
+    get "/user", UserController, :me
+
+    # API key management
+    post "/auth/tokens", AuthController, :create_api_key
+    get "/auth/tokens", AuthController, :list_api_keys
+    delete "/auth/tokens/:id", AuthController, :revoke_api_key
+
+    # Space CRUD
+    post "/spaces", SpaceController, :create
+    patch "/spaces/:id", SpaceController, :update
+    delete "/spaces/:id", SpaceController, :delete
+    post "/spaces/:id/fork", SpaceController, :fork
+
+    # Notebook CRUD + import
+    post "/spaces/:space_id/notebooks", NotebookController, :create
+    patch "/spaces/:space_id/notebooks/:id", NotebookController, :update
+    delete "/spaces/:space_id/notebooks/:id", NotebookController, :delete
+    post "/spaces/:space_id/notebooks/import", NotebookController, :import_jupyter
+
+    # Protocol CRUD
+    post "/spaces/:space_id/protocols", ProtocolController, :create
+    patch "/spaces/:space_id/protocols/:id", ProtocolController, :update
+    delete "/spaces/:space_id/protocols/:id", ProtocolController, :delete
+
+    # Dataset CRUD
+    post "/spaces/:space_id/datasets", DatasetController, :create
+    patch "/spaces/:space_id/datasets/:id", DatasetController, :update
+    delete "/spaces/:space_id/datasets/:id", DatasetController, :delete
+
+    # Webhooks
+    get "/webhooks", WebhookController, :index
+    post "/webhooks", WebhookController, :create
+    patch "/webhooks/:id", WebhookController, :update
+    delete "/webhooks/:id", WebhookController, :delete
+    get "/webhooks/:id/deliveries", WebhookController, :deliveries
+  end
+
+  # REST API v1 — convenience catch-all route (MUST be after all specific API scopes)
+  scope "/api/v1", CyaneaWeb.Api.V1 do
+    pipe_through :api_v1
+
+    get "/:owner/:slug", SpaceController, :show_by_slug
   end
 
   # Session controller routes (must be outside LiveView scopes)

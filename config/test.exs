@@ -55,3 +55,6 @@ config :stripity_stripe,
 config :cyanea, :stripe_prices,
   pro_monthly_user: "price_test_pro_user",
   pro_monthly_org: "price_test_pro_org"
+
+# Disable rate limiting in tests
+config :cyanea, :rate_limit_enabled, false

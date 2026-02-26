@@ -58,4 +58,28 @@ defmodule CyaneaWeb.ConnCase do
     |> Phoenix.ConnTest.init_test_session(%{})
     |> Plug.Conn.put_session(:user_token, token)
   end
+
+  @doc """
+  Creates an API key for the user and sets the Bearer Authorization header.
+  Returns the conn with the API auth header set.
+  """
+  def api_auth_conn(conn, user, opts \\ []) do
+    scopes = Keyword.get(opts, :scopes, ["read", "write", "admin"])
+
+    {:ok, _token, raw_token} =
+      Cyanea.ApiTokens.create_token(user, %{
+        name: "test-token",
+        scopes: scopes
+      })
+
+    Plug.Conn.put_req_header(conn, "authorization", "Bearer #{raw_token}")
+  end
+
+  @doc """
+  Encodes a JWT for the user and sets the Bearer Authorization header.
+  """
+  def jwt_auth_conn(conn, user) do
+    {:ok, jwt, _claims} = Cyanea.Guardian.encode_and_sign(user)
+    Plug.Conn.put_req_header(conn, "authorization", "Bearer #{jwt}")
+  end
 end

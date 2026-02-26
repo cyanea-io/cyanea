@@ -92,5 +92,9 @@ config :cyanea, :datacite,
   username: nil,
   password: nil
 
+# Hammer rate limiting
+config :hammer,
+  backend: {Hammer.Backend.ETS, [expiry_ms: 60_000 * 15, cleanup_interval_ms: 60_000 * 5]}
+
 # Import environment specific config
 import_config "#{config_env()}.exs"

@@ -23,8 +23,13 @@ defmodule Cyanea.Stars do
     end, [])
     |> Repo.transaction()
     |> case do
-      {:ok, %{star: star}} -> {:ok, star}
-      {:error, :star, changeset, _} -> {:error, changeset}
+      {:ok, %{star: star}} ->
+        space = Cyanea.Repo.get(Space, space_id)
+        if space, do: Cyanea.Webhooks.dispatch_event("space.starred", space, %{space_id: space_id, user_id: user_id})
+        {:ok, star}
+
+      {:error, :star, changeset, _} ->
+        {:error, changeset}
     end
   end
 

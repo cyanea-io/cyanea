@@ -71,6 +71,9 @@ defmodule Cyanea.MixProject do
       # Rust NIFs
       {:rustler, "~> 0.34"},
 
+      # Rate Limiting
+      {:hammer, "~> 6.2"},
+
       # Utilities
       {:jason, "~> 1.4"},
       {:plug_cowboy, "~> 2.7"},
