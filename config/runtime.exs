@@ -80,6 +80,23 @@ if config_env() == :prod do
     pro_monthly_user: System.get_env("STRIPE_PRICE_PRO_USER"),
     pro_monthly_org: System.get_env("STRIPE_PRICE_PRO_ORG")
 
+  # Mailer configuration
+  if smtp_host = System.get_env("SMTP_HOST") do
+    config :cyanea, Cyanea.Mailer,
+      adapter: Swoosh.Adapters.SMTP,
+      relay: smtp_host,
+      port: String.to_integer(System.get_env("SMTP_PORT") || "587"),
+      username: System.get_env("SMTP_USERNAME"),
+      password: System.get_env("SMTP_PASSWORD"),
+      tls: :if_available,
+      auth: :if_available
+  end
+
+  if mailer_from = System.get_env("MAILER_FROM_ADDRESS") do
+    config :cyanea, :mailer_from,
+      {System.get_env("MAILER_FROM_NAME") || "Cyanea", mailer_from}
+  end
+
   # DataCite DOI minting (optional)
   if datacite_prefix = System.get_env("DATACITE_PREFIX") do
     config :cyanea, :datacite,

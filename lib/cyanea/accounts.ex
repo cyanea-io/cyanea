@@ -3,7 +3,8 @@ defmodule Cyanea.Accounts do
   The Accounts context - user management and authentication.
   """
   alias Cyanea.Repo
-  alias Cyanea.Accounts.{User, UserToken}
+  alias Cyanea.Accounts.{User, UserNotifier, UserToken}
+  alias Cyanea.Workers.EmailWorker
 
   @doc """
   Gets a user by ID.
@@ -188,7 +189,8 @@ defmodule Cyanea.Accounts do
     else
       {encoded_token, user_token} = UserToken.build_email_token(user, "confirm")
       Repo.insert!(user_token)
-      # TODO: Send email via Swoosh/Oban
+      url = confirmation_url_fun.(encoded_token)
+      UserNotifier.confirmation_email(user, url) |> EmailWorker.enqueue()
       {:ok, encoded_token}
     end
   end
@@ -221,7 +223,8 @@ defmodule Cyanea.Accounts do
       when is_function(reset_password_url_fun, 1) do
     {encoded_token, user_token} = UserToken.build_email_token(user, "reset_password")
     Repo.insert!(user_token)
-    # TODO: Send email via Swoosh/Oban
+    url = reset_password_url_fun.(encoded_token)
+    UserNotifier.reset_password_email(user, url) |> EmailWorker.enqueue()
     {:ok, encoded_token}
   end
 

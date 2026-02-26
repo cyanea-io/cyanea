@@ -74,6 +74,10 @@ defmodule Cyanea.MixProject do
       # Rate Limiting
       {:hammer, "~> 6.2"},
 
+      # Email
+      {:swoosh, "~> 1.17"},
+      {:gen_smtp, "~> 1.0"},
+
       # Utilities
       {:jason, "~> 1.4"},
       {:plug_cowboy, "~> 2.7"},

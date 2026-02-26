@@ -115,6 +115,62 @@ defmodule Cyanea.AccountsTest do
     end
   end
 
+  describe "deliver_user_confirmation_instructions/2" do
+    test "generates token and enqueues email", %{} do
+      user = user_fixture()
+      url_fun = fn token -> "https://cyanea.dev/auth/confirm/#{token}" end
+
+      assert {:ok, encoded_token} = Accounts.deliver_user_confirmation_instructions(user, url_fun)
+      assert is_binary(encoded_token)
+
+      # Token was persisted
+      assert Repo.get_by(UserToken, context: "confirm", user_id: user.id)
+    end
+
+    test "returns error if already confirmed" do
+      user = user_fixture()
+      user = Repo.update!(Ecto.Changeset.change(user, confirmed_at: DateTime.utc_now() |> DateTime.truncate(:second)))
+
+      assert {:error, :already_confirmed} =
+               Accounts.deliver_user_confirmation_instructions(user, fn t -> "https://example.com/#{t}" end)
+    end
+  end
+
+  describe "confirm_user/1" do
+    test "confirms user with valid token" do
+      user = user_fixture()
+      token = Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
+      hashed = :crypto.hash(:sha256, Base.url_decode64!(token, padding: false))
+
+      Repo.insert!(%UserToken{
+        token: hashed,
+        context: "confirm",
+        sent_to: user.email,
+        user_id: user.id
+      })
+
+      assert {:ok, confirmed_user} = Accounts.confirm_user(token)
+      assert confirmed_user.confirmed_at
+    end
+
+    test "returns error for invalid token" do
+      assert :error = Accounts.confirm_user("invalid_token")
+    end
+  end
+
+  describe "deliver_user_reset_password_instructions/2" do
+    test "generates token and enqueues email" do
+      user = user_fixture()
+      url_fun = fn token -> "https://cyanea.dev/auth/reset/#{token}" end
+
+      assert {:ok, encoded_token} = Accounts.deliver_user_reset_password_instructions(user, url_fun)
+      assert is_binary(encoded_token)
+
+      # Token was persisted
+      assert Repo.get_by(UserToken, context: "reset_password", user_id: user.id)
+    end
+  end
+
   describe "session tokens" do
     setup do
       %{user: user_fixture()}

@@ -92,6 +92,9 @@ config :cyanea, :datacite,
   username: nil,
   password: nil
 
+# Mailer defaults
+config :cyanea, :mailer_from, {"Cyanea", "noreply@cyanea.dev"}
+
 # Hammer rate limiting
 config :hammer,
   backend: {Hammer.Backend.ETS, [expiry_ms: 60_000 * 15, cleanup_interval_ms: 60_000 * 5]}
