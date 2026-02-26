@@ -543,7 +543,7 @@ The platform is **100% Elixir/Phoenix**. Rust is only used for compute via NIFs 
 | **Language** | Elixir 1.17+ | Concurrency, fault tolerance, LiveView |
 | **Framework** | Phoenix 1.7+ | Real-time UI with LiveView |
 | **Background Jobs** | Oban 2.18+ | Reliable, persistent, observable |
-| **Database** | PostgreSQL 16 | JSONB, event sourcing friendly, proven |
+| **Database** | SQLite (ecto_sqlite3) | Simple deployment, single-file, no external process |
 | **File Storage** | S3-compatible | AWS S3, MinIO (self-hosted), R2 |
 | **Search** | Meilisearch 1.11+ | Fast, typo-tolerant, self-hostable |
 | **Server Compute** | Cyanea Labs via Rustler NIFs | Heavy parsing, alignment, hashing |
@@ -648,11 +648,11 @@ Prefer append-only history for artifacts + lineage:
 
 ### Multi-Repo Layout
 
-The project is split across **three separate git repositories** under the `cyanea-io` GitHub org, cloned side-by-side into a shared parent directory:
+The project is split across **four separate git repositories** under the `cyanea-bio` GitHub org, cloned side-by-side into a shared parent directory:
 
 ```
-cyanea-io/                             # Parent directory (NOT a git repo)
-├── labs/                              # Git repo: github.com/cyanea-io/labs
+cyanea-bio/                            # Parent directory (NOT a git repo)
+├── labs/                              # Git repo: github.com/cyanea-bio/labs
 │   ├── Cargo.toml                     #   Rust Cargo workspace (13 crates)
 │   ├── cyanea-core/                   #   Shared primitives, traits, errors
 │   ├── cyanea-seq/                    #   Sequence I/O and manipulation
@@ -667,19 +667,24 @@ cyanea-io/                             # Parent directory (NOT a git repo)
 │   ├── cyanea-gpu/                    #   GPU compute abstraction (CUDA/Metal)
 │   ├── cyanea-wasm/                   #   WASM bindings + browser runtime
 │   └── cyanea-py/                     #   Python bindings (PyO3)
-├── cyanea/                            # Git repo: github.com/cyanea-io/cyanea
-│   ├── lib/cyanea/                    #   Elixir business logic (contexts)
+├── cyanea-core/                       # Git repo: github.com/cyanea-bio/cyanea-core
+│   ├── lib/cyanea/                    #   Shared domain: schemas, contexts, workers
+│   ├── config/                        #   Library config (Oban, Guardian, etc.)
+│   ├── priv/repo/migrations/          #   Migrations (for standalone test suite)
+│   └── test/                          #   Context, schema, and worker tests (409)
+├── cyanea/                            # Git repo: github.com/cyanea-bio/cyanea
+│   ├── lib/cyanea/                    #   App-specific: billing, NIFs, science modules
 │   ├── lib/cyanea_web/                #   Phoenix web layer
 │   ├── native/cyanea_native/          #   Rust NIF crate (depends on labs/ via path)
 │   ├── config/                        #   Phoenix configuration
 │   ├── priv/                          #   Migrations, static assets
 │   ├── assets/                        #   Frontend (Tailwind, JS)
-│   └── test/                          #   ExUnit tests
-└── www/                               # Git repo: github.com/cyanea-io/www
+│   └── test/                          #   Web + NIF tests
+└── www/                               # Git repo: github.com/cyanea-bio/www
     └── ...                            #   Marketing website (Zola)
 ```
 
-**Important:** The NIF crate (`cyanea/native/cyanea_native/`) references labs crates via relative paths (e.g. `path = "../../../labs/cyanea-core"`), so `labs/` and `cyanea/` must be siblings in the same parent directory.
+**Important:** The NIF crate (`cyanea/native/cyanea_native/`) references labs crates via relative paths (e.g. `path = "../../../labs/cyanea-core"`), so `labs/` and `cyanea/` must be siblings in the same parent directory. Similarly, `cyanea-core` is a path dependency (`path: "../cyanea-core"`) of both `cyanea` and `cyanea-hub`.
 
 ### Labs Structure (Rust)
 
@@ -705,55 +710,61 @@ labs/                                  # github.com/cyanea-io/labs
 
 ### Platform Structure (Elixir/Phoenix)
 
-The platform is **pure Elixir/Phoenix**. Rust is only in `native/` as thin NIF wrappers.
+The platform has two Elixir layers: **cyanea-core** (shared domain library) and **cyanea** (Phoenix web app + NIF bindings).
+
+#### cyanea-core (shared library)
+
+Domain schemas, context modules, and Oban workers. Consumed as a path dependency by both `cyanea` and `cyanea-hub`.
 
 ```
-cyanea/                                # github.com/cyanea-io/cyanea
+cyanea-core/                           # github.com/cyanea-bio/cyanea-core
+├── lib/cyanea/
+│   ├── repo.ex                        # Ecto.Repo (otp_app: :cyanea)
+│   ├── guardian.ex, hash.ex           # Auth + hashing utilities
+│   ├── mailer.ex, storage.ex          # Email + S3 utilities
+│   ├── search.ex                      # Meilisearch integration
+│   ├── accounts.ex, spaces.ex, ...    # 19 context modules
+│   ├── accounts/, spaces/, ...        # Schema subdirectories
+│   ├── billing/                       # Billing schemas (subscription, storage_usage)
+│   └── workers/                       # 13 Oban workers
+├── config/                            # Library config
+├── priv/repo/migrations/              # Migrations (for standalone tests)
+└── test/                              # 409 context/schema/worker tests
+```
+
+**Note:** `Cyanea.Billing`, `Cyanea.Native`, and `Cyanea.Compute` are called from cyanea-core but defined in the consuming app. They resolve at runtime. Compile warnings about these undefined modules are expected.
+
+#### cyanea (Phoenix web app)
+
+```
+cyanea/                                # github.com/cyanea-bio/cyanea
 ├── lib/
-│   ├── cyanea/                        # Business logic (Elixir contexts)
-│   │   ├── accounts.ex                # Users, authentication
-│   │   ├── accounts/                  # User schema, tokens
-│   │   ├── organizations.ex           # Orgs context
-│   │   ├── organizations/             # Organization, Membership schemas
-│   │   ├── repositories.ex            # Repositories context
-│   │   ├── repositories/              # Repository schema
-│   │   ├── files/                     # Blob storage, content addressing
-│   │   ├── search/                    # Meilisearch integration
-│   │   ├── native.ex                  # Elixir NIF function stubs (Rustler)
-│   │   ├── guardian.ex                # JWT auth
-│   │   ├── application.ex             # OTP application
-│   │   └── repo.ex                    # Ecto repo
+│   ├── cyanea/                        # App-specific modules
+│   │   ├── application.ex             # OTP supervisor tree
+│   │   ├── billing.ex                 # Permissive billing stub (open-source)
+│   │   ├── native.ex                  # Rust NIF bindings (Rustler)
+│   │   ├── nif_helper.ex             # NIF loading utilities
+│   │   ├── formats.ex                 # File format detection (via NIFs)
+│   │   ├── release.ex                 # Release tasks
+│   │   └── seq.ex, align.ex, ...     # Science modules (NIF wrappers)
 │   └── cyanea_web/                    # Web layer (Phoenix)
 │       ├── live/                      # LiveView pages
-│       │   ├── home_live.ex
-│       │   ├── dashboard_live.ex
-│       │   ├── explore_live.ex
-│       │   ├── settings_live.ex
-│       │   ├── auth_live/             # Login, Register
-│       │   ├── repository_live/       # New, Show
-│       │   └── user_live/             # Show
-│       ├── components/                # UI components (core_components, layouts)
-│       ├── controllers/               # Session controller, error handlers
+│       ├── components/                # UI components
+│       ├── controllers/               # REST API v1 controllers
 │       ├── router.ex
 │       ├── endpoint.ex
-│       ├── user_auth.ex               # Auth plugs and helpers
-│       ├── telemetry.ex
-│       └── gettext.ex
+│       └── user_auth.ex               # Auth plugs
 ├── native/
 │   └── cyanea_native/                 # Rust NIF crate (cdylib via Rustler)
-│       ├── Cargo.toml                 # Depends on labs/ crates via path
-│       ├── Cargo.lock
-│       └── src/
-│           └── lib.rs                 # #[rustler::nif] exports
 ├── priv/
-│   ├── repo/migrations/               # Ecto database migrations
+│   ├── repo/migrations/               # Database migrations
 │   └── static/                        # Static assets
-├── assets/                            # Frontend (Tailwind, JS)
+├── assets/                            # Frontend (Tailwind, JS, WASM)
 ├── config/                            # Phoenix configuration
-└── test/                              # ExUnit tests
+└── test/                              # Web + NIF tests
 ```
 
-**Key principle:** All business logic lives in Elixir. NIFs are pure compute (parsing, hashing, alignment). No Rust in the hot path for web requests except when explicitly calling compute functions.
+**Key principle:** Domain logic lives in cyanea-core. This repo contains only the web layer, NIF bindings, billing implementation, and deployment-specific code.
 
 ---
 
@@ -1045,9 +1056,11 @@ These are areas where Claude Code should propose options, not assume:
 
 | Repo | URL | Description |
 |------|-----|-------------|
-| **labs** | `github.com/cyanea-io/labs` | Rust bioinformatics ecosystem (Cargo workspace, 13 crates) |
-| **cyanea** | `github.com/cyanea-io/cyanea` | Elixir/Phoenix platform (this repo) |
-| **www** | `github.com/cyanea-io/www` | Marketing website (Zola) |
+| **cyanea-core** | `github.com/cyanea-bio/cyanea-core` | Shared Elixir library (schemas, contexts, workers) |
+| **cyanea** | `github.com/cyanea-bio/cyanea` | Open-source node — Phoenix web app + NIFs (this repo) |
+| **cyanea-hub** | `github.com/cyanea-bio/cyanea-hub` | Private hub at app.cyanea.bio |
+| **labs** | `github.com/cyanea-bio/labs` | Rust bioinformatics ecosystem (Cargo workspace, 13 crates) |
+| **www** | `github.com/cyanea-bio/www` | Marketing website (Zola) |
 
 ### Key Files in This Repo
 
@@ -1055,3 +1068,4 @@ These are areas where Claude Code should propose options, not assume:
 - [README.md](../README.md) — Project overview
 - [docker-compose.yml](../docker-compose.yml) — Local development services
 - `native/cyanea_native/` — Rust NIF crate (thin bridge to labs/)
+- `lib/cyanea/billing.ex` — Permissive billing stub (open-source; hub has full Stripe implementation)

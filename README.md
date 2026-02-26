@@ -6,31 +6,48 @@ Cyanea is an open source research data platform for life sciences. Store dataset
 
 ## Features
 
-- **Repositories** - Git-like versioning for research data
-- **Organizations** - Labs, institutions, teams
-- **Files** - Upload, preview, download datasets
-- **Versioning** - Full commit history, diffs, restore
-- **Search** - Full-text search across all content
-- **ORCID** - Authenticate with your researcher identity
+- **Spaces** — Organize datasets, notebooks, protocols, and results
+- **Notebooks** — Interactive computational notebooks with WASM and server-side execution
+- **Protocols** — Versioned, structured protocols with step tracking
+- **Datasets** — Upload, preview, and version scientific data files
+- **Organizations** — Labs, institutions, teams with role-based access
+- **Federation** — Self-host a node, selectively publish to the network
+- **Search** — Full-text search across all content
+- **REST API** — JWT and API key auth, webhooks, full CRUD
+- **ORCID** — Authenticate with your researcher identity
+
+## Architecture
+
+Cyanea is split into multiple repositories:
+
+| Repo | Description |
+|------|-------------|
+| **[cyanea](https://github.com/cyanea-bio/cyanea)** | Phoenix web app — LiveView UI, API controllers, NIF bindings (this repo) |
+| **[cyanea-core](https://github.com/cyanea-bio/cyanea-core)** | Shared Elixir library — schemas, contexts, workers |
+| **[cyanea-hub](https://github.com/cyanea-bio/cyanea-hub)** | Private hub at app.cyanea.bio (also depends on cyanea-core) |
+| **[labs](https://github.com/cyanea-bio/labs)** | Rust bioinformatics ecosystem (13 crates) |
+
+Domain logic (Ecto schemas, context modules, Oban workers) lives in `cyanea-core` and is shared between the open-source node and the hub.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
 | Language | Elixir 1.17+ |
-| Framework | Phoenix 1.7+ with LiveView |
-| Database | PostgreSQL 16 |
-| Background Jobs | Oban |
+| Framework | Phoenix 1.8+ with LiveView |
+| Domain Logic | [cyanea-core](https://github.com/cyanea-bio/cyanea-core) (shared library) |
+| Database | SQLite via ecto_sqlite3 |
+| Background Jobs | Oban (Lite engine) |
 | File Storage | S3-compatible (AWS, MinIO, R2) |
 | Search | Meilisearch |
-| Performance | Rust NIFs (FASTA parsing, checksums, compression) |
+| Performance | Rust NIFs via Rustler |
+| Client Compute | WASM (cyanea-wasm) |
 
 ## Development
 
 ### Prerequisites
 
 - Elixir 1.17+
-- PostgreSQL 16+
 - Rust (for NIFs)
 - MinIO (local S3)
 - Meilisearch
@@ -38,7 +55,16 @@ Cyanea is an open source research data platform for life sciences. Store dataset
 ### Setup
 
 ```bash
-# Install dependencies
+# Clone side-by-side (NIFs reference labs/ via relative path)
+git clone https://github.com/cyanea-bio/cyanea-core.git
+git clone https://github.com/cyanea-bio/cyanea.git
+git clone https://github.com/cyanea-bio/labs.git
+
+# Start dependencies
+cd cyanea
+docker compose up -d
+
+# Install dependencies and setup database
 mix setup
 
 # Start the server
@@ -47,43 +73,36 @@ mix phx.server
 
 Now visit [`localhost:4000`](http://localhost:4000).
 
-### Docker Compose (recommended)
-
-```bash
-docker compose up -d
-mix setup
-mix phx.server
-```
-
 ## Project Structure
 
 ```
 cyanea/
 ├── lib/
-│   ├── cyanea/              # Business logic
-│   │   ├── accounts/        # Users, authentication
-│   │   ├── organizations/   # Orgs, memberships
-│   │   ├── repositories/    # Repos, commits
-│   │   ├── files/           # File storage
-│   │   ├── search/          # Meilisearch integration
-│   │   └── native.ex        # Rust NIF bindings
-│   └── cyanea_web/          # Web layer
+│   ├── cyanea/              # App-specific modules
+│   │   ├── application.ex   # OTP supervisor tree
+│   │   ├── billing.ex       # Billing (permissive stub for open-source)
+│   │   ├── native.ex        # Rust NIF bindings
+│   │   ├── formats.ex       # File format detection (via NIFs)
+│   │   └── *.ex             # Science modules (seq, align, chem, etc.)
+│   └── cyanea_web/          # Phoenix web layer
 │       ├── live/            # LiveView pages
 │       ├── components/      # UI components
-│       └── controllers/     # API controllers
+│       ├── controllers/     # REST API controllers
+│       └── router.ex
 ├── native/
-│   └── cyanea_native/       # Rust NIFs
-│       └── src/
-│           ├── lib.rs
-│           ├── fasta.rs     # FASTA/FASTQ parsing
-│           ├── csv_parser.rs
-│           ├── hash.rs      # SHA256
-│           └── compress.rs  # zstd
+│   └── cyanea_native/       # Rust NIF crate
+├── assets/                  # Frontend (Tailwind, JS, WASM)
 ├── priv/
 │   ├── repo/migrations/     # Database migrations
 │   └── static/              # Static assets
-└── config/                  # Configuration
+├── config/                  # Configuration
+└── test/
+    ├── cyanea/              # NIF module tests
+    ├── cyanea_web/          # Web layer tests
+    └── support/             # Fixtures, test helpers
 ```
+
+Domain schemas, contexts, and workers are provided by `cyanea-core` (path dependency at `../cyanea-core`).
 
 ## License
 
