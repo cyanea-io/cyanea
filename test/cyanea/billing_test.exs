@@ -44,9 +44,9 @@ defmodule Cyanea.BillingTest do
       assert Billing.storage_quota(user) == 1 * 1_073_741_824
     end
 
-    test "returns 50 GB for pro user" do
+    test "returns 100 GB for pro user" do
       user = pro_user_fixture()
-      assert Billing.storage_quota(user) == 50 * 1_073_741_824
+      assert Billing.storage_quota(user) == 100 * 1_073_741_824
     end
 
     test "returns 2 GB for free organization" do
@@ -55,7 +55,7 @@ defmodule Cyanea.BillingTest do
       assert Billing.storage_quota(org) == 2 * 1_073_741_824
     end
 
-    test "returns 200 GB for pro organization" do
+    test "returns 1 TB for pro organization" do
       user = user_fixture()
       org = organization_fixture(%{}, user.id)
 
@@ -64,7 +64,7 @@ defmodule Cyanea.BillingTest do
         |> Ecto.Changeset.change(%{plan: "pro"})
         |> Repo.update!()
 
-      assert Billing.storage_quota(org) == 200 * 1_073_741_824
+      assert Billing.storage_quota(org) == 1_099_511_627_776
     end
   end
 
@@ -282,7 +282,7 @@ defmodule Cyanea.BillingTest do
       assert Billing.max_org_members(org) == 1
     end
 
-    test "returns :unlimited for pro org" do
+    test "returns 5 for pro org" do
       user = user_fixture()
       org = organization_fixture(%{}, user.id)
 
@@ -291,7 +291,7 @@ defmodule Cyanea.BillingTest do
         |> Ecto.Changeset.change(%{plan: "pro"})
         |> Repo.update!()
 
-      assert Billing.max_org_members(org) == :unlimited
+      assert Billing.max_org_members(org) == 5
     end
   end
 
@@ -303,7 +303,7 @@ defmodule Cyanea.BillingTest do
       assert {:error, :member_limit_reached} = Billing.check_org_member_limit(org)
     end
 
-    test "returns :ok for pro org" do
+    test "returns :ok for pro org under limit" do
       user = user_fixture()
       org = organization_fixture(%{}, user.id)
 
@@ -312,6 +312,7 @@ defmodule Cyanea.BillingTest do
         |> Ecto.Changeset.change(%{plan: "pro"})
         |> Repo.update!()
 
+      # Pro org has 1 member (creator), limit is 5
       assert Billing.check_org_member_limit(org) == :ok
     end
   end
@@ -327,18 +328,20 @@ defmodule Cyanea.BillingTest do
       refute limits.can_server_execute
       refute limits.can_have_private_spaces
       assert limits.max_org_members == 1
+      assert limits.compute_credits == 0
     end
 
     test "returns all limits for pro user" do
       user = pro_user_fixture()
       limits = Billing.limits_for(user)
 
-      assert limits.storage_quota == 50 * 1_073_741_824
+      assert limits.storage_quota == 100 * 1_073_741_824
       assert limits.max_file_size == 200 * 1_048_576
       assert limits.max_versions_per_notebook == :unlimited
       assert limits.can_server_execute
       assert limits.can_have_private_spaces
-      assert limits.max_org_members == :unlimited
+      assert limits.max_org_members == 5
+      assert limits.compute_credits == 1_000
     end
   end
 

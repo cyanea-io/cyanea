@@ -62,7 +62,7 @@ defmodule CyaneaWeb.BillingLive do
             <div class="mt-2 flex items-center gap-2">
               <.plan_badge plan={@current_user.plan} />
               <span :if={@current_user.plan == "pro"} class="text-sm text-slate-500">
-                $39/month
+                $98/month
               </span>
             </div>
           </div>
@@ -72,7 +72,7 @@ defmodule CyaneaWeb.BillingLive do
                 phx-click="checkout"
                 class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700"
               >
-                Upgrade to Pro — $39/mo
+                Upgrade to Pro — $98/mo
               </button>
             <% else %>
               <button
@@ -104,9 +104,10 @@ defmodule CyaneaWeb.BillingLive do
               <span :if={@current_user.plan == "pro"} class="ml-1 text-xs text-primary">Current</span>
             </h4>
             <ul class="mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-400">
-              <li>50 GB storage</li>
+              <li>100 GB storage</li>
               <li>200 MB max file size</li>
-              <li>Server-side execution</li>
+              <li>1,000 compute credits/mo</li>
+              <li>Server-side execution (CPU)</li>
               <li>Public + private spaces</li>
               <li>Unlimited versions</li>
               <li>Priority support</li>

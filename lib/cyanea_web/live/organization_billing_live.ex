@@ -122,12 +122,14 @@ defmodule CyaneaWeb.OrganizationBillingLive do
               <span :if={@org.plan == "pro"} class="ml-1 text-xs text-primary">Current</span>
             </h4>
             <ul class="mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-400">
-              <li>200 GB storage</li>
+              <li>1 TB storage</li>
               <li>200 MB max file size</li>
-              <li>Unlimited members</li>
-              <li>Server-side execution</li>
+              <li>5 seats included (+$29/extra)</li>
+              <li>10,000 compute credits/mo</li>
+              <li>Server-side execution (CPU)</li>
               <li>Public + private spaces</li>
-              <li>Priority support</li>
+              <li>Audit log export</li>
+              <li>Priority support + SLA</li>
             </ul>
           </div>
         </div>

@@ -17,8 +17,8 @@ defmodule Cyanea.Billing do
   # Storage quotas in bytes
   @free_user_quota 1 * 1_073_741_824
   @free_org_quota 2 * 1_073_741_824
-  @pro_user_quota 50 * 1_073_741_824
-  @pro_org_quota 200 * 1_073_741_824
+  @pro_user_quota 100 * 1_073_741_824
+  @pro_org_quota 1_099_511_627_776
 
   # File size limits in bytes
   @free_max_file_size 50 * 1_048_576
@@ -27,8 +27,14 @@ defmodule Cyanea.Billing do
   # Version limits
   @free_max_versions_per_notebook 20
 
-  # Org member limits
+  # Org member limits (team workspace includes 5 seats)
   @free_max_org_members 1
+  @pro_max_org_members 5
+
+  # Compute credits per month (1 credit = 1 CPU-minute)
+  @pro_user_credits 1_000
+  @pro_org_credits 10_000
+  @credit_overage_rate_per_1000 10
 
   # Cache staleness threshold
   @cache_ttl_seconds 300
@@ -90,10 +96,10 @@ defmodule Cyanea.Billing do
 
   @doc """
   Returns the maximum org members for the given owner.
-  Returns an integer or `:unlimited`.
+  Free orgs get 1, Pro/Team orgs get 5 included (extra via Stripe).
   """
   def max_org_members(owner) do
-    if pro?(owner), do: :unlimited, else: @free_max_org_members
+    if pro?(owner), do: @pro_max_org_members, else: @free_max_org_members
   end
 
   @doc """
@@ -102,19 +108,27 @@ defmodule Cyanea.Billing do
   """
   def check_org_member_limit(%Organization{} = org) do
     limit = max_org_members(org)
+    current_count = count_org_members(org.id)
 
-    if limit == :unlimited do
+    if current_count < limit do
       :ok
     else
-      current_count = count_org_members(org.id)
-
-      if current_count < limit do
-        :ok
-      else
-        {:error, :member_limit_reached}
-      end
+      {:error, :member_limit_reached}
     end
   end
+
+  @doc """
+  Returns the monthly compute credit allowance for the given owner.
+  1 credit = 1 CPU-minute. Free users get 0 (WASM only).
+  """
+  def compute_credits(%User{plan: "pro"}), do: @pro_user_credits
+  def compute_credits(%Organization{plan: "pro"}), do: @pro_org_credits
+  def compute_credits(_), do: 0
+
+  @doc """
+  Returns the overage rate per 1,000 credits (in dollars).
+  """
+  def credit_overage_rate, do: @credit_overage_rate_per_1000
 
   @doc """
   Returns a map of all limits for the given owner, for display in UI.
@@ -126,7 +140,8 @@ defmodule Cyanea.Billing do
       max_versions_per_notebook: max_versions_per_notebook(owner),
       can_server_execute: can_server_execute?(owner),
       can_have_private_spaces: can_have_private_spaces?(owner),
-      max_org_members: max_org_members(owner)
+      max_org_members: max_org_members(owner),
+      compute_credits: compute_credits(owner)
     }
   end
 
