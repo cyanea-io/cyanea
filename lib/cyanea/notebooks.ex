@@ -207,42 +207,73 @@ defmodule Cyanea.Notebooks do
     content_hash = content_hash(content)
 
     Ecto.Multi.new()
-    |> Ecto.Multi.run(:next_number, fn repo, _ ->
-      result =
-        from(v in NotebookVersion,
-          where: v.notebook_id == ^notebook.id,
-          select: coalesce(max(v.number), 0) + 1
-        )
-        |> repo.one()
+    |> Ecto.Multi.run(:check_version_limit, fn repo, _ ->
+      # Look up space owner's plan and check version cap
+      space = repo.get!(Cyanea.Spaces.Space, notebook.space_id)
+      owner = resolve_space_owner(repo, space)
+      limit = Cyanea.Billing.max_versions_per_notebook(owner)
 
-      {:ok, result}
+      if limit == :unlimited do
+        {:ok, :allowed}
+      else
+        count =
+          from(v in NotebookVersion, where: v.notebook_id == ^notebook.id)
+          |> repo.aggregate(:count)
+
+        if count < limit, do: {:ok, :allowed}, else: {:ok, :limit_reached}
+      end
+    end)
+    |> Ecto.Multi.run(:next_number, fn repo, %{check_version_limit: limit_status} ->
+      if limit_status == :limit_reached do
+        {:ok, :skipped}
+      else
+        result =
+          from(v in NotebookVersion,
+            where: v.notebook_id == ^notebook.id,
+            select: coalesce(max(v.number), 0) + 1
+          )
+          |> repo.one()
+
+        {:ok, result}
+      end
     end)
     |> Ecto.Multi.run(:check_dedup, fn repo, %{next_number: next_number} ->
-      # If the latest version has the same content hash, skip creation
-      latest =
-        from(v in NotebookVersion,
-          where: v.notebook_id == ^notebook.id and v.number == ^(next_number - 1) and v.content_hash == ^content_hash
-        )
-        |> repo.one()
+      if next_number == :skipped do
+        {:ok, :skipped}
+      else
+        # If the latest version has the same content hash, skip creation
+        latest =
+          from(v in NotebookVersion,
+            where: v.notebook_id == ^notebook.id and v.number == ^(next_number - 1) and v.content_hash == ^content_hash
+          )
+          |> repo.one()
 
-      {:ok, latest}
+        {:ok, latest}
+      end
     end)
     |> Ecto.Multi.run(:version, fn repo, %{next_number: next_number, check_dedup: dedup} ->
-      if dedup do
-        {:ok, dedup}
-      else
-        %NotebookVersion{}
-        |> NotebookVersion.changeset(%{
-          number: next_number,
-          label: label,
-          content: content,
-          content_hash: content_hash,
-          trigger: trigger,
-          notebook_id: notebook.id,
-          author_id: author_id,
-          created_at: DateTime.utc_now() |> DateTime.truncate(:second)
-        })
-        |> repo.insert()
+      cond do
+        next_number == :skipped ->
+          # Version limit reached — silently return the latest existing version
+          latest = get_latest_version(notebook.id)
+          {:ok, latest}
+
+        dedup && dedup != :skipped ->
+          {:ok, dedup}
+
+        true ->
+          %NotebookVersion{}
+          |> NotebookVersion.changeset(%{
+            number: next_number,
+            label: label,
+            content: content,
+            content_hash: content_hash,
+            trigger: trigger,
+            notebook_id: notebook.id,
+            author_id: author_id,
+            created_at: DateTime.utc_now() |> DateTime.truncate(:second)
+          })
+          |> repo.insert()
       end
     end)
     |> Repo.transaction()
@@ -305,6 +336,14 @@ defmodule Cyanea.Notebooks do
     |> Jason.encode!()
     |> then(&:crypto.hash(:sha256, &1))
     |> Base.encode16(case: :lower)
+  end
+
+  defp resolve_space_owner(repo, %Cyanea.Spaces.Space{owner_type: "user", owner_id: id}) do
+    repo.get!(Cyanea.Accounts.User, id)
+  end
+
+  defp resolve_space_owner(repo, %Cyanea.Spaces.Space{owner_type: "organization", owner_id: id}) do
+    repo.get!(Cyanea.Organizations.Organization, id)
   end
 
   ## Execution Results

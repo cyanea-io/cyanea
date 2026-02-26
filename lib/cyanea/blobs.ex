@@ -149,7 +149,8 @@ defmodule Cyanea.Blobs do
   def create_blob_with_quota_check(binary, owner, opts \\ []) when is_binary(binary) do
     upload_size = byte_size(binary)
 
-    with :ok <- Cyanea.Billing.check_storage_quota(owner, upload_size),
+    with :ok <- Cyanea.Billing.check_file_size(owner, upload_size),
+         :ok <- Cyanea.Billing.check_storage_quota(owner, upload_size),
          {:ok, blob} <- create_blob_from_binary(binary, opts) do
       {owner_type, owner_id} = owner_type_and_id(owner)
       Cyanea.Billing.increment_storage_cache(owner_type, owner_id, upload_size)

@@ -81,7 +81,7 @@ defmodule CyaneaWeb.OrganizationBillingLive do
             <div class="mt-2 flex items-center gap-2">
               <.plan_badge plan={@org.plan} />
               <span :if={@org.plan == "pro"} class="text-sm text-slate-500">
-                $25/seat/month &middot; <%= @member_count %> seat(s)
+                $499/workspace/month &middot; <%= @member_count %> member(s)
               </span>
             </div>
           </div>
@@ -91,7 +91,7 @@ defmodule CyaneaWeb.OrganizationBillingLive do
                 phx-click="checkout"
                 class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700"
               >
-                Upgrade to Pro — $25/seat/mo
+                Upgrade to Pro — $499/workspace/mo
               </button>
             <% else %>
               <button
@@ -108,8 +108,11 @@ defmodule CyaneaWeb.OrganizationBillingLive do
           <div class="rounded-lg border border-slate-100 p-4 dark:border-slate-700">
             <h4 class="text-sm font-medium text-slate-900 dark:text-white">Free</h4>
             <ul class="mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-400">
+              <li>2 GB storage</li>
+              <li>50 MB max file size</li>
+              <li>1 member</li>
+              <li>WASM-only compute</li>
               <li>Public spaces only</li>
-              <li>10 GB storage</li>
               <li>Community support</li>
             </ul>
           </div>
@@ -119,9 +122,11 @@ defmodule CyaneaWeb.OrganizationBillingLive do
               <span :if={@org.plan == "pro"} class="ml-1 text-xs text-primary">Current</span>
             </h4>
             <ul class="mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-400">
-              <li>Private spaces</li>
               <li>200 GB storage</li>
-              <li>Per-seat pricing ($25/seat/mo)</li>
+              <li>200 MB max file size</li>
+              <li>Unlimited members</li>
+              <li>Server-side execution</li>
+              <li>Public + private spaces</li>
               <li>Priority support</li>
             </ul>
           </div>

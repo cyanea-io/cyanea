@@ -15,10 +15,20 @@ defmodule Cyanea.Billing do
   alias Cyanea.Repo
 
   # Storage quotas in bytes
-  @free_user_quota 5 * 1_073_741_824
-  @free_org_quota 10 * 1_073_741_824
+  @free_user_quota 1 * 1_073_741_824
+  @free_org_quota 2 * 1_073_741_824
   @pro_user_quota 50 * 1_073_741_824
   @pro_org_quota 200 * 1_073_741_824
+
+  # File size limits in bytes
+  @free_max_file_size 50 * 1_048_576
+  @pro_max_file_size 200 * 1_048_576
+
+  # Version limits
+  @free_max_versions_per_notebook 20
+
+  # Org member limits
+  @free_max_org_members 1
 
   # Cache staleness threshold
   @cache_ttl_seconds 300
@@ -44,6 +54,81 @@ defmodule Cyanea.Billing do
   Returns true if the owner can have private spaces.
   """
   def can_have_private_spaces?(owner), do: pro?(owner)
+
+  @doc """
+  Returns the maximum file upload size in bytes for the given owner.
+  """
+  def max_file_size(owner) do
+    if pro?(owner), do: @pro_max_file_size, else: @free_max_file_size
+  end
+
+  @doc """
+  Checks if a file of the given size is within the owner's upload limit.
+  Returns `:ok` or `{:error, :file_too_large}`.
+  """
+  def check_file_size(owner, file_size) do
+    if file_size <= max_file_size(owner) do
+      :ok
+    else
+      {:error, :file_too_large}
+    end
+  end
+
+  @doc """
+  Returns the max number of versions per notebook for the given owner.
+  Returns an integer or `:unlimited`.
+  """
+  def max_versions_per_notebook(owner) do
+    if pro?(owner), do: :unlimited, else: @free_max_versions_per_notebook
+  end
+
+  @doc """
+  Returns true if the owner can run server-side execution (Elixir cells).
+  Free users are limited to WASM-only (client-side) execution.
+  """
+  def can_server_execute?(owner), do: pro?(owner)
+
+  @doc """
+  Returns the maximum org members for the given owner.
+  Returns an integer or `:unlimited`.
+  """
+  def max_org_members(owner) do
+    if pro?(owner), do: :unlimited, else: @free_max_org_members
+  end
+
+  @doc """
+  Checks if adding a member to the org would exceed the member limit.
+  Returns `:ok` or `{:error, :member_limit_reached}`.
+  """
+  def check_org_member_limit(%Organization{} = org) do
+    limit = max_org_members(org)
+
+    if limit == :unlimited do
+      :ok
+    else
+      current_count = count_org_members(org.id)
+
+      if current_count < limit do
+        :ok
+      else
+        {:error, :member_limit_reached}
+      end
+    end
+  end
+
+  @doc """
+  Returns a map of all limits for the given owner, for display in UI.
+  """
+  def limits_for(owner) do
+    %{
+      storage_quota: storage_quota(owner),
+      max_file_size: max_file_size(owner),
+      max_versions_per_notebook: max_versions_per_notebook(owner),
+      can_server_execute: can_server_execute?(owner),
+      can_have_private_spaces: can_have_private_spaces?(owner),
+      max_org_members: max_org_members(owner)
+    }
+  end
 
   ## Stripe Customer Management
 

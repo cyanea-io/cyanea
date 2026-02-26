@@ -37,7 +37,7 @@ defmodule CyaneaWeb.BillingLiveTest do
       {:ok, _view, html} = live(conn, "/settings/billing")
       assert html =~ "Storage usage"
       assert html =~ "0.0 MB"
-      assert html =~ "5.0 GB"
+      assert html =~ "1.0 GB"
     end
   end
 end

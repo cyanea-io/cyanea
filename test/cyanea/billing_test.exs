@@ -39,9 +39,9 @@ defmodule Cyanea.BillingTest do
   end
 
   describe "storage_quota/1" do
-    test "returns 5 GB for free user" do
+    test "returns 1 GB for free user" do
       user = user_fixture()
-      assert Billing.storage_quota(user) == 5 * 1_073_741_824
+      assert Billing.storage_quota(user) == 1 * 1_073_741_824
     end
 
     test "returns 50 GB for pro user" do
@@ -49,10 +49,10 @@ defmodule Cyanea.BillingTest do
       assert Billing.storage_quota(user) == 50 * 1_073_741_824
     end
 
-    test "returns 10 GB for free organization" do
+    test "returns 2 GB for free organization" do
       user = user_fixture()
       org = organization_fixture(%{}, user.id)
-      assert Billing.storage_quota(org) == 10 * 1_073_741_824
+      assert Billing.storage_quota(org) == 2 * 1_073_741_824
     end
 
     test "returns 200 GB for pro organization" do
@@ -109,8 +109,8 @@ defmodule Cyanea.BillingTest do
 
     test "returns error when over quota" do
       user = user_fixture()
-      # 5 GB + 1 byte
-      over_limit = 5 * 1_073_741_824 + 1
+      # 1 GB + 1 byte
+      over_limit = 1 * 1_073_741_824 + 1
       assert {:error, :storage_quota_exceeded} = Billing.check_storage_quota(user, over_limit)
     end
   end
@@ -120,7 +120,7 @@ defmodule Cyanea.BillingTest do
       user = user_fixture()
       info = Billing.storage_info(user)
       assert info.bytes_used == 0
-      assert info.quota == 5 * 1_073_741_824
+      assert info.quota == 1 * 1_073_741_824
       assert info.percentage == 0.0
     end
   end
@@ -219,6 +219,126 @@ defmodule Cyanea.BillingTest do
 
       updated_user = Repo.get!(Cyanea.Accounts.User, user.id)
       assert updated_user.plan == "free"
+    end
+  end
+
+  describe "max_file_size/1" do
+    test "returns 50 MB for free user" do
+      user = user_fixture()
+      assert Billing.max_file_size(user) == 50 * 1_048_576
+    end
+
+    test "returns 200 MB for pro user" do
+      user = pro_user_fixture()
+      assert Billing.max_file_size(user) == 200 * 1_048_576
+    end
+  end
+
+  describe "check_file_size/2" do
+    test "returns :ok when within limit" do
+      user = user_fixture()
+      assert Billing.check_file_size(user, 10 * 1_048_576) == :ok
+    end
+
+    test "returns error when over limit for free user" do
+      user = user_fixture()
+      assert {:error, :file_too_large} = Billing.check_file_size(user, 51 * 1_048_576)
+    end
+
+    test "allows larger files for pro user" do
+      user = pro_user_fixture()
+      assert Billing.check_file_size(user, 100 * 1_048_576) == :ok
+    end
+  end
+
+  describe "max_versions_per_notebook/1" do
+    test "returns 20 for free user" do
+      user = user_fixture()
+      assert Billing.max_versions_per_notebook(user) == 20
+    end
+
+    test "returns :unlimited for pro user" do
+      user = pro_user_fixture()
+      assert Billing.max_versions_per_notebook(user) == :unlimited
+    end
+  end
+
+  describe "can_server_execute?/1" do
+    test "returns false for free user" do
+      user = user_fixture()
+      refute Billing.can_server_execute?(user)
+    end
+
+    test "returns true for pro user" do
+      user = pro_user_fixture()
+      assert Billing.can_server_execute?(user)
+    end
+  end
+
+  describe "max_org_members/1" do
+    test "returns 1 for free org" do
+      user = user_fixture()
+      org = organization_fixture(%{}, user.id)
+      assert Billing.max_org_members(org) == 1
+    end
+
+    test "returns :unlimited for pro org" do
+      user = user_fixture()
+      org = organization_fixture(%{}, user.id)
+
+      org =
+        org
+        |> Ecto.Changeset.change(%{plan: "pro"})
+        |> Repo.update!()
+
+      assert Billing.max_org_members(org) == :unlimited
+    end
+  end
+
+  describe "check_org_member_limit/1" do
+    test "returns error for free org with existing member" do
+      user = user_fixture()
+      org = organization_fixture(%{}, user.id)
+      # org already has 1 member (the creator), limit is 1
+      assert {:error, :member_limit_reached} = Billing.check_org_member_limit(org)
+    end
+
+    test "returns :ok for pro org" do
+      user = user_fixture()
+      org = organization_fixture(%{}, user.id)
+
+      org =
+        org
+        |> Ecto.Changeset.change(%{plan: "pro"})
+        |> Repo.update!()
+
+      assert Billing.check_org_member_limit(org) == :ok
+    end
+  end
+
+  describe "limits_for/1" do
+    test "returns all limits for free user" do
+      user = user_fixture()
+      limits = Billing.limits_for(user)
+
+      assert limits.storage_quota == 1 * 1_073_741_824
+      assert limits.max_file_size == 50 * 1_048_576
+      assert limits.max_versions_per_notebook == 20
+      refute limits.can_server_execute
+      refute limits.can_have_private_spaces
+      assert limits.max_org_members == 1
+    end
+
+    test "returns all limits for pro user" do
+      user = pro_user_fixture()
+      limits = Billing.limits_for(user)
+
+      assert limits.storage_quota == 50 * 1_073_741_824
+      assert limits.max_file_size == 200 * 1_048_576
+      assert limits.max_versions_per_notebook == :unlimited
+      assert limits.can_server_execute
+      assert limits.can_have_private_spaces
+      assert limits.max_org_members == :unlimited
     end
   end
 

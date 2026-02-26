@@ -75,13 +75,13 @@ defmodule CyaneaWeb.NotebookLive.ExecutionTest do
       assert html =~ "Running..."
     end
 
-    test "enqueues server execution for elixir cells", %{conn: conn, user: user, space: space} do
+    test "shows upgrade message for elixir cells on free plan", %{conn: conn, user: user, space: space} do
       {:ok, view, _html} =
         live(conn, ~p"/#{user.username}/#{space.slug}/notebooks/execution-test")
 
       html = render_click(view, "run-cell", %{"cell-id" => "elixir-cell"})
-      # Should show running state for elixir cells now
-      assert html =~ "Running..."
+      # Free users can't run server-side code
+      assert html =~ "Server-side execution requires a Pro plan"
     end
 
     test "shows coming soon for python cells", %{conn: conn, user: user, space: space} do
@@ -130,13 +130,15 @@ defmodule CyaneaWeb.NotebookLive.ExecutionTest do
   end
 
   describe "run-all event" do
-    test "marks executable cells as running", %{conn: conn, user: user, space: space} do
+    test "marks wasm cells as running and shows upgrade for server cells", %{conn: conn, user: user, space: space} do
       {:ok, view, _html} =
         live(conn, ~p"/#{user.username}/#{space.slug}/notebooks/execution-test")
 
       html = render_click(view, "run-all", %{})
-      # Should show running state for both cyanea and elixir cells
+      # Should show running state for cyanea (WASM) cells
       assert html =~ "Running..."
+      # Server cells should show upgrade message on free plan
+      assert html =~ "Server-side execution requires a Pro plan"
     end
   end
 

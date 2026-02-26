@@ -128,12 +128,16 @@ defmodule Cyanea.Organizations do
   end
 
   @doc """
-  Adds a member to an organization.
+  Adds a member to an organization, checking the member limit first.
   """
   def add_member(org_id, user_id, role \\ "member") do
-    %Membership{}
-    |> Membership.changeset(%{organization_id: org_id, user_id: user_id, role: role})
-    |> Repo.insert()
+    org = get_organization!(org_id)
+
+    with :ok <- Cyanea.Billing.check_org_member_limit(org) do
+      %Membership{}
+      |> Membership.changeset(%{organization_id: org_id, user_id: user_id, role: role})
+      |> Repo.insert()
+    end
   end
 
   @doc """

@@ -103,4 +103,39 @@ defmodule Cyanea.NotebooksTest do
       end
     end
   end
+
+  describe "create_version/4 version cap" do
+    setup :setup_space
+
+    test "creates versions within free limit", %{space: space} do
+      notebook = notebook_fixture(%{space_id: space.id})
+      assert {:ok, version} = Notebooks.create_version(notebook, "manual")
+      assert version.number == 1
+    end
+
+    test "stops creating versions when free limit reached", %{space: space} do
+      notebook = notebook_fixture(%{space_id: space.id})
+
+      # Create 20 versions (free limit)
+      for i <- 1..20 do
+        # Update notebook content to bypass dedup
+        {:ok, updated} =
+          Notebooks.update_notebook(notebook, %{
+            content: %{"cells" => [%{"id" => "cell-#{i}", "type" => "code", "source" => "v#{i}", "language" => "cyanea", "position" => 0}]}
+          })
+
+        assert {:ok, _version} = Notebooks.create_version(updated, "manual")
+      end
+
+      # 21st version should be silently skipped (returns latest)
+      {:ok, updated} =
+        Notebooks.update_notebook(notebook, %{
+          content: %{"cells" => [%{"id" => "cell-21", "type" => "code", "source" => "v21", "language" => "cyanea", "position" => 0}]}
+        })
+
+      assert {:ok, version} = Notebooks.create_version(updated, "manual")
+      # Should return the existing version 20, not create 21
+      assert version.number == 20
+    end
+  end
 end

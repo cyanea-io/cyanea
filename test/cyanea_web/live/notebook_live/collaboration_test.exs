@@ -90,12 +90,12 @@ defmodule CyaneaWeb.NotebookLive.CollaborationTest do
       assert html =~ "ELIXIR"
     end
 
-    test "run-cell for elixir cell shows running state", %{conn: conn, user: user, space: space} do
+    test "run-cell for elixir cell shows upgrade message on free plan", %{conn: conn, user: user, space: space} do
       {:ok, view, _html} =
         live(conn, ~p"/#{user.username}/#{space.slug}/notebooks/collab-test")
 
       html = render_click(view, "run-cell", %{"cell-id" => "elixir-1"})
-      assert html =~ "Running..."
+      assert html =~ "Server-side execution requires a Pro plan"
     end
 
     test "cyanea cells still use client-side execution", %{

@@ -175,27 +175,41 @@ defmodule CyaneaWeb.NotebookLive.Show do
 
       case Execution.execution_target(language) do
         :wasm ->
-          # Client-side execution via Web Worker
+          # Client-side execution via Web Worker — always allowed
           {:noreply,
            socket
            |> update(:running_cells, &MapSet.put(&1, cell_id))
            |> push_event("execute-cell", %{cell_id: cell_id, source: cell["source"] || ""})}
 
         :server ->
-          # Server-side execution via Oban
-          user = socket.assigns[:current_user]
+          # Check if owner can run server-side execution
+          owner = resolve_space_owner(socket.assigns.space)
 
-          %{
-            notebook_id: socket.assigns.notebook.id,
-            cell_id: cell_id,
-            source: cell["source"] || "",
-            language: language,
-            user_id: user && user.id
-          }
-          |> Cyanea.Workers.CellExecutionWorker.new()
-          |> Oban.insert()
+          if Cyanea.Billing.can_server_execute?(owner) do
+            user = socket.assigns[:current_user]
 
-          {:noreply, update(socket, :running_cells, &MapSet.put(&1, cell_id))}
+            %{
+              notebook_id: socket.assigns.notebook.id,
+              cell_id: cell_id,
+              source: cell["source"] || "",
+              language: language,
+              user_id: user && user.id
+            }
+            |> Cyanea.Workers.CellExecutionWorker.new()
+            |> Oban.insert()
+
+            {:noreply, update(socket, :running_cells, &MapSet.put(&1, cell_id))}
+          else
+            output = %{
+              "type" => "error",
+              "data" => "Server-side execution requires a Pro plan. Upgrade at /settings/billing",
+              "timing_ms" => 0
+            }
+
+            {:noreply,
+             socket
+             |> update(:cell_outputs, &Map.put(&1, cell_id, output))}
+          end
 
         :server_coming_soon ->
           output = %{
@@ -218,6 +232,9 @@ defmodule CyaneaWeb.NotebookLive.Show do
     user = socket.assigns[:current_user]
     Notebooks.create_version(socket.assigns.notebook, "run_all", user && user.id, "Run all")
 
+    owner = resolve_space_owner(socket.assigns.space)
+    can_server = Cyanea.Billing.can_server_execute?(owner)
+
     executable_cells =
       socket.assigns.cells
       |> Enum.filter(&Notebooks.executable_cell?/1)
@@ -231,31 +248,44 @@ defmodule CyaneaWeb.NotebookLive.Show do
     # Queue WASM cells for client-side execution
     wasm_data = Enum.map(wasm_cells, &%{id: &1["id"], source: &1["source"] || ""})
 
-    # Enqueue server cells via Oban
+    # Enqueue server cells via Oban (only if owner can server execute)
     user_id = user && user.id
 
-    for cell <- server_cells do
-      case Execution.execution_target(cell["language"]) do
-        :server ->
-          %{
-            notebook_id: socket.assigns.notebook.id,
-            cell_id: cell["id"],
-            source: cell["source"] || "",
-            language: cell["language"],
-            user_id: user_id
-          }
-          |> Cyanea.Workers.CellExecutionWorker.new()
-          |> Oban.insert()
+    cell_outputs_updates =
+      for cell <- server_cells, reduce: %{} do
+        acc ->
+          case Execution.execution_target(cell["language"]) do
+            :server ->
+              if can_server do
+                %{
+                  notebook_id: socket.assigns.notebook.id,
+                  cell_id: cell["id"],
+                  source: cell["source"] || "",
+                  language: cell["language"],
+                  user_id: user_id
+                }
+                |> Cyanea.Workers.CellExecutionWorker.new()
+                |> Oban.insert()
 
-        :server_coming_soon ->
-          :skip
+                acc
+              else
+                Map.put(acc, cell["id"], %{
+                  "type" => "error",
+                  "data" => "Server-side execution requires a Pro plan. Upgrade at /settings/billing",
+                  "timing_ms" => 0
+                })
+              end
+
+            :server_coming_soon ->
+              acc
+          end
       end
-    end
 
     running_ids =
       executable_cells
       |> Enum.filter(fn cell ->
-        Execution.execution_target(cell["language"]) in [:wasm, :server]
+        target = Execution.execution_target(cell["language"])
+        target == :wasm || (target == :server && can_server)
       end)
       |> Enum.map(& &1["id"])
       |> MapSet.new()
@@ -263,6 +293,7 @@ defmodule CyaneaWeb.NotebookLive.Show do
     {:noreply,
      socket
      |> assign(running_cells: running_ids)
+     |> update(:cell_outputs, &Map.merge(&1, cell_outputs_updates))
      |> push_event("execute-all", %{cells: wasm_data})}
   end
 
@@ -917,4 +948,12 @@ defmodule CyaneaWeb.NotebookLive.Show do
   defp diff_badge_class(:added), do: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
   defp diff_badge_class(:removed), do: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
   defp diff_badge_class(:moved), do: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+
+  defp resolve_space_owner(%{owner_type: "user", owner_id: id}) do
+    Cyanea.Repo.get!(Cyanea.Accounts.User, id)
+  end
+
+  defp resolve_space_owner(%{owner_type: "organization", owner_id: id}) do
+    Cyanea.Repo.get!(Cyanea.Organizations.Organization, id)
+  end
 end
