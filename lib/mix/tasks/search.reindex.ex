@@ -17,8 +17,8 @@ defmodule Mix.Tasks.Search.Reindex do
     Mix.shell().info("Setting up indexes...")
     Cyanea.Search.setup_indexes()
 
-    Mix.shell().info("Reindexing repositories...")
-    Cyanea.Search.reindex_all_repositories()
+    Mix.shell().info("Reindexing spaces...")
+    Cyanea.Search.reindex_all_spaces()
 
     Mix.shell().info("Reindexing users...")
     Cyanea.Search.reindex_all_users()

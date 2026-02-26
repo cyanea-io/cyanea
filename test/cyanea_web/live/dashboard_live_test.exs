@@ -3,7 +3,7 @@ defmodule CyaneaWeb.DashboardLiveTest do
 
   import Phoenix.LiveViewTest
   import Cyanea.AccountsFixtures
-  import Cyanea.RepositoriesFixtures
+  import Cyanea.SpacesFixtures
   import Cyanea.OrganizationsFixtures
 
   describe "Dashboard page" do
@@ -11,9 +11,9 @@ defmodule CyaneaWeb.DashboardLiveTest do
       assert {:error, {:redirect, %{to: "/auth/login"}}} = live(conn, ~p"/dashboard")
     end
 
-    test "shows user's repositories", %{conn: conn} do
+    test "shows user's spaces", %{conn: conn} do
       user = user_fixture()
-      _repo = repository_fixture(%{owner_id: user.id, name: "my-dataset"})
+      _space = space_fixture(%{owner_type: "user", owner_id: user.id, name: "my-dataset"})
 
       {:ok, _lv, html} = conn |> log_in_user(user) |> live(~p"/dashboard")
       assert html =~ "my-dataset"

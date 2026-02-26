@@ -1,19 +1,19 @@
 defmodule CyaneaWeb.ExploreLive do
   use CyaneaWeb, :live_view
 
-  alias Cyanea.Repositories
   alias Cyanea.Search
+  alias Cyanea.Spaces
 
   @impl true
   def mount(_params, _session, socket) do
-    repositories = Repositories.list_public_repositories()
+    spaces = Spaces.list_public_spaces()
 
     {:ok,
      assign(socket,
        page_title: "Explore",
-       repositories: repositories,
+       spaces: spaces,
        search_query: "",
-       active_tab: :repositories,
+       active_tab: :spaces,
        user_results: []
      )}
   end
@@ -21,11 +21,11 @@ defmodule CyaneaWeb.ExploreLive do
   @impl true
   def handle_event("search", %{"query" => query}, socket) do
     if query == "" do
-      repositories = Repositories.list_public_repositories()
-      {:noreply, assign(socket, repositories: repositories, search_query: "", user_results: [])}
+      spaces = Spaces.list_public_spaces()
+      {:noreply, assign(socket, spaces: spaces, search_query: "", user_results: [])}
     else
-      {repositories, user_results} = perform_search(query)
-      {:noreply, assign(socket, repositories: repositories, search_query: query, user_results: user_results)}
+      {spaces, user_results} = perform_search(query)
+      {:noreply, assign(socket, spaces: spaces, search_query: query, user_results: user_results)}
     end
   end
 
@@ -34,15 +34,13 @@ defmodule CyaneaWeb.ExploreLive do
   end
 
   defp perform_search(query) do
-    repo_results =
-      case Search.search_repositories(query, filter: "visibility = public") do
+    space_results =
+      case Search.search_spaces(query, filter: "visibility = public") do
         {:ok, %{"hits" => hits}} when hits != [] ->
-          # Load full records from DB by IDs
           ids = Enum.map(hits, & &1["id"])
-          load_repositories_by_ids(ids)
+          load_spaces_by_ids(ids)
 
         _ ->
-          # Fallback to DB search
           db_fallback_search(query)
       end
 
@@ -52,28 +50,27 @@ defmodule CyaneaWeb.ExploreLive do
         _ -> []
       end
 
-    {repo_results, user_results}
+    {space_results, user_results}
   end
 
-  defp load_repositories_by_ids(ids) do
+  defp load_spaces_by_ids(ids) do
     import Ecto.Query
 
-    from(r in Cyanea.Repositories.Repository,
-      where: r.id in ^ids,
-      where: r.visibility == "public",
-      preload: [:owner, :organization]
+    from(s in Cyanea.Spaces.Space,
+      where: s.id in ^ids,
+      where: s.visibility == "public"
     )
     |> Cyanea.Repo.all()
   end
 
   defp db_fallback_search(query) do
-    repositories = Repositories.list_public_repositories()
+    spaces = Spaces.list_public_spaces()
     q = String.downcase(query)
 
-    Enum.filter(repositories, fn repo ->
-      String.contains?(String.downcase(repo.name), q) ||
-        (repo.description && String.contains?(String.downcase(repo.description), q)) ||
-        Enum.any?(repo.tags || [], &String.contains?(String.downcase(&1), q))
+    Enum.filter(spaces, fn space ->
+      String.contains?(String.downcase(space.name), q) ||
+        (space.description && String.contains?(String.downcase(space.description), q)) ||
+        Enum.any?(space.tags || [], &String.contains?(String.downcase(&1), q))
     end)
   end
 
@@ -83,18 +80,18 @@ defmodule CyaneaWeb.ExploreLive do
     <div>
       <.header>
         Explore
-        <:subtitle>Discover public datasets, protocols, and research artifacts</:subtitle>
+        <:subtitle>Discover public datasets, protocols, and research spaces</:subtitle>
       </.header>
 
       <div class="mt-6">
-        <.search_input value={@search_query} placeholder="Search repositories and users..." />
+        <.search_input value={@search_query} placeholder="Search spaces and users..." />
       </div>
 
       <%!-- Tabs --%>
       <div :if={@search_query != ""} class="mt-6">
         <.tabs>
-          <:tab active={@active_tab == :repositories} click="switch-tab" value="repositories" count={length(@repositories)}>
-            Repositories
+          <:tab active={@active_tab == :spaces} click="switch-tab" value="spaces" count={length(@spaces)}>
+            Spaces
           </:tab>
           <:tab active={@active_tab == :users} click="switch-tab" value="users" count={length(@user_results)}>
             Users
@@ -102,33 +99,33 @@ defmodule CyaneaWeb.ExploreLive do
         </.tabs>
       </div>
 
-      <%!-- Repository results --%>
-      <div :if={@active_tab == :repositories} class="mt-8 space-y-4">
+      <%!-- Space results --%>
+      <div :if={@active_tab == :spaces} class="mt-8 space-y-4">
         <div
-          :for={repo <- @repositories}
+          :for={space <- @spaces}
           class="rounded-xl border border-slate-200 bg-white p-6 transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600"
         >
           <div class="flex items-start justify-between">
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
                 <.link
-                  navigate={repo_path(repo)}
+                  navigate={space_path(space)}
                   class="text-lg font-semibold text-primary hover:underline"
                 >
-                  <span class="text-slate-500"><%= repo_owner_name(repo) %>/</span><%= repo.name %>
+                  <span class="text-slate-500"><%= space_owner_name(space) %>/</span><%= space.name %>
                 </.link>
-                <.visibility_badge visibility={repo.visibility} />
+                <.visibility_badge visibility={space.visibility} />
               </div>
-              <p :if={repo.description} class="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                <%= repo.description %>
+              <p :if={space.description} class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                <%= space.description %>
               </p>
               <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                <.metadata_row :if={repo.license} icon="hero-scale">
-                  <%= repo.license %>
+                <.metadata_row :if={space.license} icon="hero-scale">
+                  <%= space.license %>
                 </.metadata_row>
-                <.badge :for={tag <- repo.tags || []} color={:gray} size={:xs}><%= tag %></.badge>
+                <.badge :for={tag <- space.tags || []} color={:gray} size={:xs}><%= tag %></.badge>
                 <.metadata_row icon="hero-star">
-                  <%= repo.stars_count %>
+                  <%= space.star_count %>
                 </.metadata_row>
               </div>
             </div>
@@ -136,8 +133,8 @@ defmodule CyaneaWeb.ExploreLive do
         </div>
 
         <.empty_state
-          :if={@repositories == []}
-          heading="No repositories found."
+          :if={@spaces == []}
+          heading="No spaces found."
         />
       </div>
 
@@ -163,19 +160,12 @@ defmodule CyaneaWeb.ExploreLive do
     """
   end
 
-  defp repo_path(repo) do
-    cond do
-      repo.owner -> ~p"/#{repo.owner.username}/#{repo.slug}"
-      repo.organization -> ~p"/#{repo.organization.slug}/#{repo.slug}"
-      true -> "#"
-    end
+  defp space_path(space) do
+    owner = space_owner_name(space)
+    ~p"/#{owner}/#{space.slug}"
   end
 
-  defp repo_owner_name(repo) do
-    cond do
-      repo.owner -> repo.owner.username
-      repo.organization -> repo.organization.slug
-      true -> "unknown"
-    end
+  defp space_owner_name(space) do
+    Cyanea.Spaces.owner_display(space)
   end
 end

@@ -5,8 +5,7 @@ defmodule Cyanea.FederationTest do
   alias Cyanea.Federation.Node
 
   import Cyanea.AccountsFixtures
-  import Cyanea.RepositoriesFixtures
-  import Cyanea.ArtifactsFixtures
+  import Cyanea.SpacesFixtures
   import Cyanea.FederationFixtures
 
   # ===========================================================================
@@ -14,19 +13,11 @@ defmodule Cyanea.FederationTest do
   # ===========================================================================
 
   describe "parse_global_id/1" do
-    test "parses a valid global ID with version" do
-      assert {:ok, parsed} = Federation.parse_global_id("cyanea://hub.example.com/lab-x/rna-seq/counts@1.0.0")
+    test "parses a valid global ID" do
+      assert {:ok, parsed} = Federation.parse_global_id("cyanea://hub.example.com/lab-x/rna-seq")
       assert parsed.host == "hub.example.com"
       assert parsed.owner == "lab-x"
-      assert parsed.repo == "rna-seq"
-      assert parsed.slug == "counts"
-      assert parsed.version == "1.0.0"
-    end
-
-    test "parses a global ID without version" do
-      assert {:ok, parsed} = Federation.parse_global_id("cyanea://hub.example.com/lab/repo/artifact")
-      assert parsed.slug == "artifact"
-      assert parsed.version == nil
+      assert parsed.slug == "rna-seq"
     end
 
     test "rejects invalid global IDs" do
@@ -136,42 +127,40 @@ defmodule Cyanea.FederationTest do
   describe "publish_manifest/2" do
     setup do
       user = user_fixture()
-      repo = repository_fixture(%{owner_id: user.id})
-      artifact = artifact_fixture(%{repository_id: repo.id, author_id: user.id})
-      %{user: user, repo: repo, artifact: artifact}
+      space = space_fixture(%{owner_type: "user", owner_id: user.id})
+      %{user: user, space: space}
     end
 
-    test "creates a manifest and assigns global ID", %{artifact: artifact} do
-      assert {:ok, manifest} = Federation.publish_manifest(artifact)
+    test "creates a manifest and assigns global ID", %{space: space} do
+      assert {:ok, manifest} = Federation.publish_manifest(space)
       assert manifest.global_id != nil
-      assert manifest.artifact_id == artifact.id
+      assert manifest.space_id == space.id
       assert manifest.content_hash != nil
     end
 
-    test "manifest includes artifact metadata", %{artifact: artifact} do
-      {:ok, manifest} = Federation.publish_manifest(artifact)
-      assert manifest.payload["type"] == artifact.type
-      assert manifest.payload["version"] == artifact.version
+    test "manifest includes space metadata", %{space: space} do
+      {:ok, manifest} = Federation.publish_manifest(space)
+      assert manifest.payload["name"] == space.name
+      assert manifest.payload["visibility"] == space.visibility
     end
   end
 
   describe "get_manifest_by_global_id/1" do
     setup do
       user = user_fixture()
-      repo = repository_fixture(%{owner_id: user.id})
-      artifact = artifact_fixture(%{repository_id: repo.id, author_id: user.id})
-      {:ok, manifest} = Federation.publish_manifest(artifact)
+      space = space_fixture(%{owner_type: "user", owner_id: user.id})
+      {:ok, manifest} = Federation.publish_manifest(space)
       %{manifest: manifest}
     end
 
     test "returns manifest with preloads", %{manifest: manifest} do
       found = Federation.get_manifest_by_global_id(manifest.global_id)
       assert found.id == manifest.id
-      assert found.artifact != nil
+      assert found.space != nil
     end
 
     test "returns nil for unknown global ID" do
-      assert Federation.get_manifest_by_global_id("cyanea://unknown/a/b/c@1.0.0") == nil
+      assert Federation.get_manifest_by_global_id("cyanea://unknown/a/b") == nil
     end
   end
 
@@ -188,7 +177,7 @@ defmodule Cyanea.FederationTest do
     test "record, complete, and fail sync entries", %{node: node} do
       attrs = %{
         direction: "push",
-        resource_type: "artifact",
+        resource_type: "space",
         resource_id: Ecto.UUID.generate(),
         node_id: node.id
       }
@@ -218,7 +207,7 @@ defmodule Cyanea.FederationTest do
     test "list_sync_entries returns entries for a node", %{node: node} do
       {:ok, _} = Federation.record_sync(%{
         direction: "push",
-        resource_type: "artifact",
+        resource_type: "space",
         resource_id: Ecto.UUID.generate(),
         node_id: node.id
       })
@@ -230,7 +219,7 @@ defmodule Cyanea.FederationTest do
     test "pending_syncs returns only pending entries", %{node: node} do
       {:ok, entry} = Federation.record_sync(%{
         direction: "push",
-        resource_type: "artifact",
+        resource_type: "space",
         resource_id: Ecto.UUID.generate(),
         node_id: node.id
       })

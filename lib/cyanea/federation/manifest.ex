@@ -1,10 +1,10 @@
 defmodule Cyanea.Federation.Manifest do
   @moduledoc """
-  Signed manifest — an attestation that a specific artifact version
+  Signed manifest — an attestation that a specific space version
   has been published to the federation network.
 
   Manifests are content-addressed: the `content_hash` covers the
-  artifact's data, and the optional `signature` proves provenance
+  space's data, and the optional `signature` proves provenance
   via the signer's public key.
   """
   use Ecto.Schema
@@ -20,7 +20,7 @@ defmodule Cyanea.Federation.Manifest do
     field :signer_key_id, :string
     field :payload, :map, default: %{}
 
-    belongs_to :artifact, Cyanea.Artifacts.Artifact
+    belongs_to :space, Cyanea.Spaces.Space
     belongs_to :node, Cyanea.Federation.Node
 
     timestamps(type: :utc_datetime)
@@ -35,10 +35,10 @@ defmodule Cyanea.Federation.Manifest do
       :signature,
       :signer_key_id,
       :payload,
-      :artifact_id,
+      :space_id,
       :node_id
     ])
-    |> validate_required([:global_id, :content_hash, :artifact_id])
+    |> validate_required([:global_id, :content_hash, :space_id])
     |> unique_constraint(:global_id)
   end
 end

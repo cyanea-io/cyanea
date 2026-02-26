@@ -13,7 +13,7 @@ defmodule Cyanea.Federation.SyncEntry do
 
   @directions ~w(push pull)
   @statuses ~w(pending in_progress completed failed)
-  @resource_types ~w(artifact manifest)
+  @resource_types ~w(artifact manifest space)
 
   schema "sync_entries" do
     field :direction, :string

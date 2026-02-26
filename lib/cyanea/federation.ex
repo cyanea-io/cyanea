@@ -4,17 +4,17 @@ defmodule Cyanea.Federation do
 
   Manages Cyanea's federation layer: connecting nodes, publishing
   signed manifests, and tracking sync state. Federation is selective
-  per-artifact and opt-in per-node.
+  per-space and opt-in per-node.
 
   ## Global ID Scheme
 
   Resources are identified by URIs of the form:
 
-      cyanea://<host>/<owner>/<repo>/<artifact-slug>@<version>
+      cyanea://<host>/<owner>/<space-slug>
 
   For example:
 
-      cyanea://hub.cyanea.io/lab-x/rna-seq-2024/raw-counts@1.0.0
+      cyanea://hub.cyanea.io/lab-x/rna-seq-2024
 
   Global IDs are stable, human-readable, and encode enough context
   for cross-node resolution.
@@ -23,50 +23,36 @@ defmodule Cyanea.Federation do
 
   alias Cyanea.Repo
   alias Cyanea.Federation.{Node, Manifest, SyncEntry}
-  alias Cyanea.Artifacts.Artifact
+  alias Cyanea.Spaces.Space
 
   # ===========================================================================
   # Global IDs
   # ===========================================================================
 
   @doc """
-  Generates a global federation ID for an artifact.
+  Generates a global federation ID for a space.
 
-  Format: `cyanea://<host>/<owner-or-org>/<repo-slug>/<artifact-slug>@<version>`
+  Format: `cyanea://<host>/<owner>/<space-slug>`
 
   The host is read from the `FEDERATION_NODE_URL` environment variable,
   falling back to the configured `PHX_HOST`.
   """
-  def generate_global_id(%Artifact{} = artifact) do
-    artifact = Repo.preload(artifact, repository: [:owner, :organization])
+  def generate_global_id(%Space{} = space) do
     host = node_host()
-
-    owner_slug =
-      if artifact.repository.organization do
-        artifact.repository.organization.slug
-      else
-        artifact.repository.owner.username
-      end
-
-    "cyanea://#{host}/#{owner_slug}/#{artifact.repository.slug}/#{artifact.slug}@#{artifact.version}"
+    owner_slug = Cyanea.Spaces.owner_display(space)
+    "cyanea://#{host}/#{owner_slug}/#{space.slug}"
   end
 
   @doc """
   Parses a global ID into its components.
 
-  Returns `{:ok, %{host: host, owner: owner, repo: repo, slug: slug, version: version}}`
+  Returns `{:ok, %{host: host, owner: owner, slug: slug}}`
   or `{:error, :invalid_global_id}`.
   """
   def parse_global_id("cyanea://" <> rest) do
-    case String.split(rest, "/", parts: 4) do
-      [host, owner, repo, slug_version] ->
-        case String.split(slug_version, "@", parts: 2) do
-          [slug, version] ->
-            {:ok, %{host: host, owner: owner, repo: repo, slug: slug, version: version}}
-
-          [slug] ->
-            {:ok, %{host: host, owner: owner, repo: repo, slug: slug, version: nil}}
-        end
+    case String.split(rest, "/", parts: 3) do
+      [host, owner, slug] ->
+        {:ok, %{host: host, owner: owner, slug: slug}}
 
       _ ->
         {:error, :invalid_global_id}
@@ -76,12 +62,12 @@ defmodule Cyanea.Federation do
   def parse_global_id(_), do: {:error, :invalid_global_id}
 
   @doc """
-  Assigns a global ID to an artifact and persists it.
+  Assigns a global ID to a space and persists it.
   """
-  def assign_global_id(%Artifact{} = artifact) do
-    global_id = generate_global_id(artifact)
+  def assign_global_id(%Space{} = space) do
+    global_id = generate_global_id(space)
 
-    artifact
+    space
     |> Ecto.Changeset.change(global_id: global_id)
     |> Repo.update()
   end
@@ -170,56 +156,53 @@ defmodule Cyanea.Federation do
   # ===========================================================================
 
   @doc """
-  Publishes a signed manifest for an artifact.
+  Publishes a signed manifest for a space.
 
-  This creates a manifest record that attests the artifact's content hash
+  This creates a manifest record that attests the space's content hash
   and optionally signs it with the node's key.
   """
-  def publish_manifest(%Artifact{} = artifact, opts \\ []) do
+  def publish_manifest(%Space{} = space, opts \\ []) do
     node_id = Keyword.get(opts, :node_id)
     signature = Keyword.get(opts, :signature)
     signer_key_id = Keyword.get(opts, :signer_key_id)
 
-    # Ensure the artifact has a global ID.
-    artifact =
-      if artifact.global_id do
-        artifact
+    # Ensure the space has a global ID.
+    space =
+      if space.global_id do
+        space
       else
-        {:ok, artifact} = assign_global_id(artifact)
-        artifact
+        {:ok, space} = assign_global_id(space)
+        space
       end
 
     content_hash =
-      artifact.content_hash ||
-        :crypto.hash(:sha256, :erlang.term_to_binary(artifact.id))
-        |> Base.encode16(case: :lower)
+      :crypto.hash(:sha256, :erlang.term_to_binary(space.id))
+      |> Base.encode16(case: :lower)
 
     %Manifest{}
     |> Manifest.changeset(%{
-      global_id: artifact.global_id,
+      global_id: space.global_id,
       content_hash: content_hash,
       signature: signature,
       signer_key_id: signer_key_id,
-      artifact_id: artifact.id,
+      space_id: space.id,
       node_id: node_id,
       payload: %{
-        "type" => artifact.type,
-        "version" => artifact.version,
-        "name" => artifact.name,
-        "visibility" => artifact.visibility
+        "name" => space.name,
+        "visibility" => space.visibility
       }
     })
     |> Repo.insert()
   end
 
   @doc """
-  Gets the manifest for an artifact's global ID.
+  Gets the manifest for a space's global ID.
   """
   def get_manifest_by_global_id(global_id) do
     Repo.get_by(Manifest, global_id: global_id)
     |> case do
       nil -> nil
-      manifest -> Repo.preload(manifest, [:artifact, :node])
+      manifest -> Repo.preload(manifest, [:space, :node])
     end
   end
 
@@ -234,7 +217,7 @@ defmodule Cyanea.Federation do
       from(m in Manifest,
         order_by: [desc: m.inserted_at],
         limit: ^limit,
-        preload: [:artifact]
+        preload: [:space]
       )
 
     query =

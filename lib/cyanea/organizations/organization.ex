@@ -19,8 +19,6 @@ defmodule Cyanea.Organizations.Organization do
 
     has_many :memberships, Cyanea.Organizations.Membership
     has_many :members, through: [:memberships, :user]
-    has_many :repositories, Cyanea.Repositories.Repository
-
     timestamps(type: :utc_datetime)
   end
 

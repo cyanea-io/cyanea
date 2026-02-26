@@ -50,9 +50,19 @@ defmodule Cyanea.Storage do
   end
 
   @doc """
-  Generates an S3 key for a repository file.
+  Generates an S3 key for a space file (legacy path layout).
   """
-  def generate_s3_key(repo_id, path) do
-    "repos/#{repo_id}/#{path}"
+  def generate_s3_key(space_id, path) do
+    "spaces/#{space_id}/#{path}"
+  end
+
+  @doc """
+  Generates a content-addressed S3 key for a blob.
+  Layout: `blobs/<first-2-chars>/<next-2-chars>/<full-sha256>`
+  """
+  def generate_blob_s3_key(sha256) do
+    prefix1 = String.slice(sha256, 0, 2)
+    prefix2 = String.slice(sha256, 2, 2)
+    "blobs/#{prefix1}/#{prefix2}/#{sha256}"
   end
 end

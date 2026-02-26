@@ -1,10 +1,10 @@
 defmodule Cyanea.Search do
   @moduledoc """
-  Meilisearch integration for full-text search across repositories and users.
+  Meilisearch integration for full-text search across spaces and users.
   All operations are gated by `:search_enabled` config.
   """
 
-  @repo_index "repositories"
+  @space_index "spaces"
   @user_index "users"
 
   ## Index Setup
@@ -16,12 +16,12 @@ defmodule Cyanea.Search do
     unless search_enabled?(), do: throw(:search_disabled)
 
     # Create indexes (idempotent — will return error if exists, which is fine)
-    Meilisearch.Indexes.create(@repo_index, primary_key: "id")
+    Meilisearch.Indexes.create(@space_index, primary_key: "id")
     Meilisearch.Indexes.create(@user_index, primary_key: "id")
 
-    # Configure repositories index
-    Meilisearch.Settings.update(@repo_index, %{
-      searchableAttributes: ["name", "slug", "description", "tags", "owner_username", "org_name"],
+    # Configure spaces index
+    Meilisearch.Settings.update(@space_index, %{
+      searchableAttributes: ["name", "slug", "description", "tags", "owner_name"],
       attributesForFaceting: ["visibility", "license", "tags"]
     })
 
@@ -38,36 +38,37 @@ defmodule Cyanea.Search do
   ## Indexing
 
   @doc """
-  Indexes a repository in Meilisearch.
+  Indexes a space in Meilisearch.
   """
-  def index_repository(repo) do
+  def index_space(space) do
     unless search_enabled?(), do: throw(:search_disabled)
 
+    owner_name = Cyanea.Spaces.owner_display(space)
+
     doc = %{
-      id: repo.id,
-      name: repo.name,
-      slug: repo.slug,
-      description: repo.description || "",
-      visibility: repo.visibility,
-      license: repo.license,
-      tags: repo.tags || [],
-      stars_count: repo.stars_count || 0,
-      updated_at: repo.updated_at && DateTime.to_unix(repo.updated_at),
-      owner_username: if(repo.owner, do: repo.owner.username, else: nil),
-      org_name: if(repo.organization, do: repo.organization.name, else: nil)
+      id: space.id,
+      name: space.name,
+      slug: space.slug,
+      description: space.description || "",
+      visibility: space.visibility,
+      license: space.license,
+      tags: space.tags || [],
+      star_count: space.star_count || 0,
+      updated_at: space.updated_at && DateTime.to_unix(space.updated_at),
+      owner_name: owner_name
     }
 
-    Meilisearch.Documents.add_or_replace(@repo_index, [doc])
+    Meilisearch.Documents.add_or_replace(@space_index, [doc])
   catch
     :search_disabled -> :ok
   end
 
   @doc """
-  Removes a repository from the search index.
+  Removes a space from the search index.
   """
-  def delete_repository(id) do
+  def delete_space(id) do
     unless search_enabled?(), do: throw(:search_disabled)
-    Meilisearch.Documents.delete(@repo_index, id)
+    Meilisearch.Documents.delete(@space_index, id)
   catch
     :search_disabled -> :ok
   end
@@ -104,12 +105,12 @@ defmodule Cyanea.Search do
   ## Searching
 
   @doc """
-  Searches repositories. Returns `{:ok, results}` or `{:error, reason}`.
+  Searches spaces. Returns `{:ok, results}` or `{:error, reason}`.
 
   Options:
     - `:limit` - Max results (default 20)
   """
-  def search_repositories(query, opts \\ []) do
+  def search_spaces(query, opts \\ []) do
     unless search_enabled?(), do: throw(:search_disabled)
 
     search_opts = [limit: Keyword.get(opts, :limit, 20)]
@@ -121,7 +122,7 @@ defmodule Cyanea.Search do
         filter -> [{:filters, filter} | search_opts]
       end
 
-    Meilisearch.Search.search(@repo_index, query, search_opts)
+    Meilisearch.Search.search(@space_index, query, search_opts)
   catch
     :search_disabled -> {:ok, %{"hits" => []}}
   end
@@ -141,18 +142,17 @@ defmodule Cyanea.Search do
   ## Bulk Reindex
 
   @doc """
-  Reindexes all public repositories.
+  Reindexes all public spaces.
   """
-  def reindex_all_repositories do
+  def reindex_all_spaces do
     import Ecto.Query
 
     Cyanea.Repo.all(
-      from(r in Cyanea.Repositories.Repository,
-        where: r.visibility == "public",
-        preload: [:owner, :organization]
+      from(s in Cyanea.Spaces.Space,
+        where: s.visibility == "public"
       )
     )
-    |> Enum.each(&index_repository/1)
+    |> Enum.each(&index_space/1)
   end
 
   @doc """

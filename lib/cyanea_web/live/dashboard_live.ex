@@ -1,19 +1,19 @@
 defmodule CyaneaWeb.DashboardLive do
   use CyaneaWeb, :live_view
 
-  alias Cyanea.Repositories
   alias Cyanea.Organizations
+  alias Cyanea.Spaces
 
   @impl true
   def mount(_params, _session, socket) do
     user = socket.assigns.current_user
-    repositories = Repositories.list_user_repositories(user.id)
+    spaces = Spaces.list_user_spaces(user.id)
     organizations = Organizations.list_user_organizations(user.id)
 
     {:ok,
      assign(socket,
        page_title: "Dashboard",
-       repositories: repositories,
+       spaces: spaces,
        organizations: organizations
      )}
   end
@@ -25,44 +25,44 @@ defmodule CyaneaWeb.DashboardLive do
       <%!-- Main Content --%>
       <div>
         <div class="flex items-center justify-between">
-          <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Your repositories</h2>
+          <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Your spaces</h2>
           <.link
             navigate={~p"/new"}
             class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700"
           >
-            New repository
+            New space
           </.link>
         </div>
 
         <div class="mt-4 space-y-3">
           <div
-            :for={repo <- @repositories}
+            :for={space <- @spaces}
             class="rounded-lg border border-slate-200 bg-white p-4 transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600"
           >
             <div class="flex items-start justify-between">
               <div class="flex items-center gap-2">
                 <.link
-                  navigate={~p"/#{@current_user.username}/#{repo.slug}"}
+                  navigate={~p"/#{@current_user.username}/#{space.slug}"}
                   class="font-semibold text-primary hover:underline"
                 >
-                  <%= repo.name %>
+                  <%= space.name %>
                 </.link>
-                <.visibility_badge visibility={repo.visibility} />
+                <.visibility_badge visibility={space.visibility} />
               </div>
               <span class="text-xs text-slate-500">
-                Updated <%= CyaneaWeb.Formatters.format_relative(repo.updated_at) %>
+                Updated <%= CyaneaWeb.Formatters.format_relative(space.updated_at) %>
               </span>
             </div>
-            <p :if={repo.description} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              <%= repo.description %>
+            <p :if={space.description} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              <%= space.description %>
             </p>
           </div>
 
           <.empty_state
-            :if={@repositories == []}
+            :if={@spaces == []}
             icon="hero-folder-plus"
-            heading="No repositories"
-            description="Get started by creating a new repository."
+            heading="No spaces"
+            description="Get started by creating a new space."
             bordered
           >
             <:action>
@@ -70,7 +70,7 @@ defmodule CyaneaWeb.DashboardLive do
                 navigate={~p"/new"}
                 class="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700"
               >
-                New repository
+                New space
               </.link>
             </:action>
           </.empty_state>

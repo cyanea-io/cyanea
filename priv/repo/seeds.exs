@@ -13,7 +13,7 @@
 alias Cyanea.Repo
 alias Cyanea.Accounts.User
 alias Cyanea.Organizations.{Organization, Membership}
-alias Cyanea.Repositories.Repository
+alias Cyanea.Spaces.Space
 
 # Only seed in dev environment
 if Mix.env() == :dev do
@@ -60,20 +60,21 @@ if Mix.env() == :dev do
 
     IO.puts("Added demo user as owner of cyanea-labs")
 
-    # Create a demo repository
-    %Repository{}
-    |> Repository.changeset(%{
-      name: "example-dataset",
+    # Create a demo space
+    %Space{}
+    |> Space.changeset(%{
+      name: "Example Dataset",
       slug: "example-dataset",
       description: "An example dataset demonstrating Cyanea's features",
       visibility: "public",
       license: "cc-by-4.0",
-      organization_id: demo_org.id,
+      owner_type: "organization",
+      owner_id: demo_org.id,
       tags: ["example", "demo", "genomics"]
     })
     |> Repo.insert(on_conflict: :nothing)
 
-    IO.puts("Created demo repository: cyanea-labs/example-dataset")
+    IO.puts("Created demo space: cyanea-labs/example-dataset")
   end
 
   IO.puts("Seeding complete!")

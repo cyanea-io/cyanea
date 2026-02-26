@@ -54,7 +54,7 @@ defmodule CyaneaWeb.Router do
 
     live_session :require_authenticated_user,
       on_mount: [{CyaneaWeb.UserAuth, :ensure_authenticated}] do
-      live "/new", RepositoryLive.New, :new
+      live "/new", SpaceLive.New, :new
       live "/settings", SettingsLive, :edit
       live "/dashboard", DashboardLive, :index
 
@@ -63,16 +63,16 @@ defmodule CyaneaWeb.Router do
       live "/organizations/:slug/settings", OrganizationLive.Settings, :edit
       live "/organizations/:slug/members", OrganizationLive.Members, :index
 
-      # Artifact creation (requires auth)
-      live "/:username/:slug/artifacts/new", ArtifactLive.New, :new
+      # Space settings (requires auth)
+      live "/:username/:slug/settings", SpaceLive.Settings, :edit
     end
   end
 
-  # File downloads (public scope, access checked in controller)
+  # Blob downloads (public scope, access checked in controller)
   scope "/", CyaneaWeb do
     pipe_through :browser
 
-    get "/files/:id/download", FileController, :download
+    get "/blobs/:id/download", BlobController, :download
   end
 
   # Public routes
@@ -84,8 +84,7 @@ defmodule CyaneaWeb.Router do
       live "/", HomeLive, :index
       live "/explore", ExploreLive, :index
       live "/:username", UserLive.Show, :show
-      live "/:username/:slug", RepositoryLive.Show, :show
-      live "/:username/:slug/artifacts/:artifact_slug", ArtifactLive.Show, :show
+      live "/:username/:slug", SpaceLive.Show, :show
     end
   end
 
