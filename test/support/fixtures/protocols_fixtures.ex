@@ -12,7 +12,18 @@ defmodule Cyanea.ProtocolsFixtures do
       title: unique_protocol_title(),
       slug: unique_protocol_slug(),
       description: "A test protocol",
-      content: %{"steps" => []},
+      content: %{
+        "materials" => [
+          %{"name" => "Taq Polymerase", "quantity" => "1 uL", "vendor" => "NEB", "catalog_number" => "M0273"}
+        ],
+        "equipment" => [
+          %{"name" => "Thermocycler", "settings" => "Standard PCR", "notes" => ""}
+        ],
+        "steps" => [
+          %{"number" => 1, "description" => "Prepare master mix", "duration" => "5 min", "temperature" => "4C", "notes" => "Keep on ice"}
+        ],
+        "tips" => "If bands are faint, increase template concentration."
+      },
       version: "1.0.0",
       position: 0
     })

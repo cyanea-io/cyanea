@@ -65,6 +65,11 @@ defmodule CyaneaWeb.Router do
 
       # Space settings (requires auth)
       live "/:username/:slug/settings", SpaceLive.Settings, :edit
+
+      # Content creation (requires auth)
+      live "/:username/:slug/notebooks/new", NotebookLive.New, :new
+      live "/:username/:slug/protocols/new", ProtocolLive.New, :new
+      live "/:username/:slug/datasets/new", DatasetLive.New, :new
     end
   end
 
@@ -85,6 +90,11 @@ defmodule CyaneaWeb.Router do
       live "/explore", ExploreLive, :index
       live "/:username", UserLive.Show, :show
       live "/:username/:slug", SpaceLive.Show, :show
+
+      # Content detail pages (public, access checked in mount)
+      live "/:username/:slug/notebooks/:notebook_slug", NotebookLive.Show, :show
+      live "/:username/:slug/protocols/:protocol_slug", ProtocolLive.Show, :show
+      live "/:username/:slug/datasets/:dataset_slug", DatasetLive.Show, :show
     end
   end
 

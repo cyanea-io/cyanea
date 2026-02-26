@@ -17,6 +17,7 @@ defmodule Cyanea.Workers.MetadataExtractionWorker do
 
   alias Cyanea.Blobs
   alias Cyanea.Compute
+  alias Cyanea.Datasets
 
   @extractors %{
     "fasta" => &Compute.fasta_stats/1,
@@ -36,12 +37,13 @@ defmodule Cyanea.Workers.MetadataExtractionWorker do
   }
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"blob_id" => blob_id}}) do
+  def perform(%Oban.Job{args: %{"blob_id" => blob_id} = args}) do
     blob = Blobs.get_blob!(blob_id)
+    dataset_id = Map.get(args, "dataset_id")
 
     case find_extractor(blob) do
       nil -> :ok
-      extractor -> run_extractor(blob, extractor)
+      extractor -> run_extractor(blob, extractor, dataset_id)
     end
   end
 
@@ -56,25 +58,43 @@ defmodule Cyanea.Workers.MetadataExtractionWorker do
     Map.get(@extractors, ext)
   end
 
-  defp run_extractor(blob, extractor) do
+  defp run_extractor(blob, extractor, dataset_id) do
     tmp_path = Path.join(System.tmp_dir!(), "cyanea_meta_#{blob.id}")
 
     try do
       with :ok <- download_blob(blob, tmp_path) do
-        run_analysis(extractor, tmp_path)
+        run_analysis(extractor, tmp_path, dataset_id)
       end
     after
       File.rm(tmp_path)
     end
   end
 
-  defp run_analysis(extractor, path) do
+  defp run_analysis(extractor, path, dataset_id) do
     case extractor.(path) do
-      {:ok, _stats} -> :ok
-      {:error, :nif_not_loaded} -> :ok
-      {:error, reason} -> {:error, reason}
+      {:ok, stats} ->
+        persist_stats(dataset_id, stats)
+        :ok
+
+      {:error, :nif_not_loaded} ->
+        :ok
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
+
+  defp persist_stats(nil, _stats), do: :ok
+
+  defp persist_stats(dataset_id, stats) when is_map(stats) do
+    dataset = Datasets.get_dataset!(dataset_id)
+    Datasets.update_metadata(dataset, stats)
+    :ok
+  rescue
+    _ -> :ok
+  end
+
+  defp persist_stats(_dataset_id, _stats), do: :ok
 
   defp download_blob(blob, tmp_path) do
     case Cyanea.Storage.download(blob.s3_key) do

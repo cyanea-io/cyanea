@@ -59,6 +59,9 @@ defmodule Cyanea.MixProject do
       {:ex_aws_s3, "~> 2.5"},
       {:sweet_xml, "~> 0.7"},
 
+      # Markdown
+      {:earmark, "~> 1.4"},
+
       # Search
       {:meilisearch, "~> 0.20"},
 

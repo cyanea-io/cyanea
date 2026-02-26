@@ -260,31 +260,59 @@ defmodule CyaneaWeb.SpaceLive.Show do
 
         <%!-- Notebooks --%>
         <div :if={@active_tab == "notebooks"}>
+          <div :if={@is_owner} class="mb-4 flex justify-end">
+            <.link
+              navigate={~p"/#{@owner_name}/#{@space.slug}/notebooks/new"}
+              class="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+            >
+              <.icon name="hero-plus" class="h-4 w-4" /> New Notebook
+            </.link>
+          </div>
           <.card padding="p-0">
             <div :if={@notebooks != []} class="divide-y divide-slate-100 dark:divide-slate-700">
-              <div
+              <.link
                 :for={notebook <- @notebooks}
-                class="flex items-center justify-between px-6 py-3"
+                navigate={~p"/#{@owner_name}/#{@space.slug}/notebooks/#{notebook.slug}"}
+                class="flex items-center justify-between px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50"
               >
                 <div class="flex items-center gap-3">
                   <.icon name="hero-book-open" class="h-5 w-5 text-slate-400 shrink-0" />
                   <span class="text-sm font-medium text-slate-900 dark:text-white"><%= notebook.title %></span>
                 </div>
-              </div>
+              </.link>
             </div>
             <div :if={@notebooks == []} class="px-6 py-12">
-              <.empty_state icon="hero-book-open" heading="No notebooks yet." />
+              <.empty_state icon="hero-book-open" heading="No notebooks yet.">
+                <:action>
+                  <.link
+                    :if={@is_owner}
+                    navigate={~p"/#{@owner_name}/#{@space.slug}/notebooks/new"}
+                    class="text-sm font-medium text-primary hover:text-primary/80"
+                  >
+                    Create your first notebook
+                  </.link>
+                </:action>
+              </.empty_state>
             </div>
           </.card>
         </div>
 
         <%!-- Protocols --%>
         <div :if={@active_tab == "protocols"}>
+          <div :if={@is_owner} class="mb-4 flex justify-end">
+            <.link
+              navigate={~p"/#{@owner_name}/#{@space.slug}/protocols/new"}
+              class="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+            >
+              <.icon name="hero-plus" class="h-4 w-4" /> New Protocol
+            </.link>
+          </div>
           <.card padding="p-0">
             <div :if={@protocols != []} class="divide-y divide-slate-100 dark:divide-slate-700">
-              <div
+              <.link
                 :for={protocol <- @protocols}
-                class="flex items-center justify-between px-6 py-3"
+                navigate={~p"/#{@owner_name}/#{@space.slug}/protocols/#{protocol.slug}"}
+                class="flex items-center justify-between px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50"
               >
                 <div class="flex items-center gap-3">
                   <.icon name="hero-clipboard-document-list" class="h-5 w-5 text-slate-400 shrink-0" />
@@ -293,21 +321,40 @@ defmodule CyaneaWeb.SpaceLive.Show do
                     <span class="ml-2 text-xs text-slate-500">v<%= protocol.version %></span>
                   </div>
                 </div>
-              </div>
+              </.link>
             </div>
             <div :if={@protocols == []} class="px-6 py-12">
-              <.empty_state icon="hero-clipboard-document-list" heading="No protocols yet." />
+              <.empty_state icon="hero-clipboard-document-list" heading="No protocols yet.">
+                <:action>
+                  <.link
+                    :if={@is_owner}
+                    navigate={~p"/#{@owner_name}/#{@space.slug}/protocols/new"}
+                    class="text-sm font-medium text-primary hover:text-primary/80"
+                  >
+                    Create your first protocol
+                  </.link>
+                </:action>
+              </.empty_state>
             </div>
           </.card>
         </div>
 
         <%!-- Datasets --%>
         <div :if={@active_tab == "datasets"}>
+          <div :if={@is_owner} class="mb-4 flex justify-end">
+            <.link
+              navigate={~p"/#{@owner_name}/#{@space.slug}/datasets/new"}
+              class="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+            >
+              <.icon name="hero-plus" class="h-4 w-4" /> New Dataset
+            </.link>
+          </div>
           <.card padding="p-0">
             <div :if={@datasets != []} class="divide-y divide-slate-100 dark:divide-slate-700">
-              <div
+              <.link
                 :for={dataset <- @datasets}
-                class="flex items-center justify-between px-6 py-3"
+                navigate={~p"/#{@owner_name}/#{@space.slug}/datasets/#{dataset.slug}"}
+                class="flex items-center justify-between px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50"
               >
                 <div class="flex items-center gap-3">
                   <.icon name="hero-circle-stack" class="h-5 w-5 text-slate-400 shrink-0" />
@@ -316,10 +363,20 @@ defmodule CyaneaWeb.SpaceLive.Show do
                 <div class="flex items-center gap-2">
                   <.badge :for={tag <- dataset.tags || []} color={:gray} size={:xs}><%= tag %></.badge>
                 </div>
-              </div>
+              </.link>
             </div>
             <div :if={@datasets == []} class="px-6 py-12">
-              <.empty_state icon="hero-circle-stack" heading="No datasets yet." />
+              <.empty_state icon="hero-circle-stack" heading="No datasets yet.">
+                <:action>
+                  <.link
+                    :if={@is_owner}
+                    navigate={~p"/#{@owner_name}/#{@space.slug}/datasets/new"}
+                    class="text-sm font-medium text-primary hover:text-primary/80"
+                  >
+                    Create your first dataset
+                  </.link>
+                </:action>
+              </.empty_state>
             </div>
           </.card>
         </div>

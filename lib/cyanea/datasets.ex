@@ -102,4 +102,51 @@ defmodule Cyanea.Datasets do
     df = Repo.get!(DatasetFile, dataset_file_id)
     Repo.delete(df)
   end
+
+  @doc """
+  Returns a changeset for tracking dataset changes in forms.
+  """
+  def change_dataset(%Dataset{} = dataset, attrs \\ %{}) do
+    Dataset.changeset(dataset, attrs)
+  end
+
+  ## Metadata Management
+
+  @doc """
+  Merges new metadata keys into the existing dataset metadata.
+  """
+  def update_metadata(%Dataset{} = dataset, metadata_map) when is_map(metadata_map) do
+    merged = Map.merge(dataset.metadata || %{}, metadata_map)
+    update_dataset(dataset, %{metadata: merged})
+  end
+
+  @doc """
+  Replaces the dataset's tags.
+  """
+  def update_tags(%Dataset{} = dataset, tags) when is_list(tags) do
+    update_dataset(dataset, %{tags: tags})
+  end
+
+  @doc """
+  Computes basic statistics for a dataset.
+  """
+  def compute_stats(dataset_id) do
+    files = list_dataset_files(dataset_id)
+
+    total_size = Enum.reduce(files, 0, fn f, acc -> acc + (f.size || 0) end)
+    file_count = length(files)
+
+    formats =
+      files
+      |> Enum.map(fn f ->
+        f.path
+        |> Path.extname()
+        |> String.trim_leading(".")
+        |> String.downcase()
+      end)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.uniq()
+
+    %{total_size: total_size, file_count: file_count, formats: formats}
+  end
 end

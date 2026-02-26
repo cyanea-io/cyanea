@@ -11,7 +11,23 @@ defmodule Cyanea.NotebooksFixtures do
     Enum.into(attrs, %{
       title: unique_notebook_title(),
       slug: unique_notebook_slug(),
-      content: %{"cells" => []},
+      content: %{
+        "cells" => [
+          %{
+            "id" => Ecto.UUID.generate(),
+            "type" => "markdown",
+            "source" => "# Analysis\n\nThis notebook contains a sample analysis.",
+            "position" => 0
+          },
+          %{
+            "id" => Ecto.UUID.generate(),
+            "type" => "code",
+            "source" => "IO.puts(\"Hello from Cyanea!\")",
+            "language" => "elixir",
+            "position" => 1
+          }
+        ]
+      },
       position: 0
     })
   end

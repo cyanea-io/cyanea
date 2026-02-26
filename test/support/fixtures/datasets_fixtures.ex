@@ -13,8 +13,12 @@ defmodule Cyanea.DatasetsFixtures do
       slug: unique_dataset_slug(),
       description: "A test dataset",
       storage_type: "local",
-      metadata: %{},
-      tags: [],
+      metadata: %{
+        "row_count" => 1000,
+        "column_count" => 5,
+        "columns" => ["gene_id", "sample_1", "sample_2", "sample_3", "p_value"]
+      },
+      tags: ["genomics", "rna-seq"],
       position: 0
     })
   end
@@ -24,6 +28,29 @@ defmodule Cyanea.DatasetsFixtures do
 
     unless Map.has_key?(attrs, :space_id) do
       raise "dataset_fixture requires :space_id"
+    end
+
+    {:ok, dataset} = Cyanea.Datasets.create_dataset(attrs)
+    dataset
+  end
+
+  @doc """
+  Creates a dataset with minimal metadata for testing metadata updates.
+  """
+  def empty_dataset_fixture(attrs \\ %{}) do
+    attrs =
+      Enum.into(attrs, %{
+        name: unique_dataset_name(),
+        slug: unique_dataset_slug(),
+        description: "Empty dataset for testing",
+        storage_type: "local",
+        metadata: %{},
+        tags: [],
+        position: 0
+      })
+
+    unless Map.has_key?(attrs, :space_id) do
+      raise "empty_dataset_fixture requires :space_id"
     end
 
     {:ok, dataset} = Cyanea.Datasets.create_dataset(attrs)
