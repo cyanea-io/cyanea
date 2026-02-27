@@ -1,12 +1,12 @@
 defmodule CyaneaWeb.Api.V1.DatasetController do
   use CyaneaWeb, :controller
 
-  alias Cyanea.{Datasets, Organizations, Spaces}
+  alias Cyanea.{Blobs, Datasets, Organizations, Spaces}
   alias CyaneaWeb.Api.V1.ApiHelpers
 
   action_fallback CyaneaWeb.Api.V1.FallbackController
 
-  plug CyaneaWeb.Plugs.RequireScope, [scope: "write"] when action in [:create, :update, :delete]
+  plug CyaneaWeb.Plugs.RequireScope, [scope: "write"] when action in [:create, :update, :delete, :upload_file, :delete_file]
 
   @doc "GET /api/v1/spaces/:space_id/datasets"
   def index(conn, %{"space_id" => space_id}) do
@@ -98,6 +98,71 @@ defmodule CyaneaWeb.Api.V1.DatasetController do
     end
   end
 
+  @doc "GET /api/v1/spaces/:space_id/datasets/:dataset_id/files"
+  def list_files(conn, %{"space_id" => space_id, "dataset_id" => dataset_id}) do
+    with {:ok, space} <- fetch_space(space_id),
+         :ok <- check_access(space, conn.assigns[:current_user]),
+         {:ok, _dataset} <- fetch_dataset(dataset_id, space_id) do
+      files = Datasets.list_dataset_files(dataset_id)
+      json(conn, %{data: Enum.map(files, &ApiHelpers.serialize_dataset_file/1)})
+    end
+  end
+
+  @doc "POST /api/v1/spaces/:space_id/datasets/:dataset_id/files"
+  def upload_file(conn, %{"space_id" => space_id, "dataset_id" => dataset_id} = params) do
+    user = conn.assigns.current_user
+
+    with {:ok, space} <- fetch_space(space_id),
+         :ok <- authorize_write(space, user),
+         {:ok, dataset} <- fetch_dataset(dataset_id, space_id),
+         {:ok, upload} <- extract_upload(params),
+         {:ok, binary} <- File.read(upload.path) do
+      owner = resolve_owner(space)
+      mime = upload.content_type || "application/octet-stream"
+      path = params["path"] || upload.filename
+
+      case Blobs.create_blob_with_quota_check(binary, owner, mime_type: mime) do
+        {:ok, blob} ->
+          case Datasets.attach_file(dataset, blob.id, path, size: byte_size(binary)) do
+            {:ok, df} ->
+              %{blob_id: blob.id}
+              |> Cyanea.Workers.MetadataExtractionWorker.new()
+              |> Oban.insert()
+
+              conn |> put_status(:created) |> json(%{data: ApiHelpers.serialize_dataset_file(df)})
+
+            {:error, changeset} ->
+              {:error, changeset}
+          end
+
+        {:error, :storage_quota_exceeded} ->
+          {:error, :storage_quota_exceeded}
+
+        {:error, :file_too_large} ->
+          {:error, :file_too_large}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    end
+  end
+
+  @doc "DELETE /api/v1/spaces/:space_id/datasets/:dataset_id/files/:file_id"
+  def delete_file(conn, %{"space_id" => space_id, "dataset_id" => dataset_id, "file_id" => file_id}) do
+    user = conn.assigns.current_user
+
+    with {:ok, space} <- fetch_space(space_id),
+         :ok <- authorize_write(space, user),
+         {:ok, _dataset} <- fetch_dataset(dataset_id, space_id) do
+      try do
+        {:ok, _} = Datasets.detach_file(file_id)
+        json(conn, %{data: %{message: "File removed"}})
+      rescue
+        Ecto.NoResultsError -> {:error, :not_found}
+      end
+    end
+  end
+
   ## Private
 
   defp fetch_space(id) do
@@ -137,5 +202,16 @@ defmodule CyaneaWeb.Api.V1.DatasetController do
     Map.new(map, fn {k, v} -> {String.to_existing_atom(k), v} end)
   rescue
     ArgumentError -> Map.new(map, fn {k, v} -> {String.to_atom(k), v} end)
+  end
+
+  defp extract_upload(%{"file" => %Plug.Upload{} = upload}), do: {:ok, upload}
+  defp extract_upload(_params), do: {:error, :bad_request}
+
+  defp resolve_owner(%Cyanea.Spaces.Space{owner_type: "user", owner_id: id}) do
+    Cyanea.Repo.get!(Cyanea.Accounts.User, id)
+  end
+
+  defp resolve_owner(%Cyanea.Spaces.Space{owner_type: "organization", owner_id: id}) do
+    Cyanea.Repo.get!(Cyanea.Organizations.Organization, id)
   end
 end

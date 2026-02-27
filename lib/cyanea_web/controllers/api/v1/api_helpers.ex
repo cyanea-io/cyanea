@@ -69,6 +69,20 @@ defmodule CyaneaWeb.Api.V1.ApiHelpers do
     }
   end
 
+  def serialize_dataset_file(df) do
+    %{
+      id: df.id,
+      path: df.path,
+      size: df.size,
+      dataset_id: df.dataset_id,
+      blob_id: df.blob_id,
+      mime_type: if(Ecto.assoc_loaded?(df.blob) && df.blob, do: df.blob.mime_type),
+      sha256: if(Ecto.assoc_loaded?(df.blob) && df.blob, do: df.blob.sha256),
+      inserted_at: format_datetime(df.inserted_at),
+      updated_at: format_datetime(df.updated_at)
+    }
+  end
+
   def serialize_user(user) do
     %{
       id: user.id,

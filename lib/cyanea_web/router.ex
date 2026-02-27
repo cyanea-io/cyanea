@@ -62,6 +62,7 @@ defmodule CyaneaWeb.Router do
 
     get "/spaces/:space_id/datasets", DatasetController, :index
     get "/spaces/:space_id/datasets/:id", DatasetController, :show
+    get "/spaces/:space_id/datasets/:dataset_id/files", DatasetController, :list_files
 
     get "/users/:username", UserController, :show
     get "/users/:username/spaces", UserController, :spaces
@@ -105,6 +106,10 @@ defmodule CyaneaWeb.Router do
     post "/spaces/:space_id/datasets", DatasetController, :create
     patch "/spaces/:space_id/datasets/:id", DatasetController, :update
     delete "/spaces/:space_id/datasets/:id", DatasetController, :delete
+
+    # Dataset file management
+    post "/spaces/:space_id/datasets/:dataset_id/files", DatasetController, :upload_file
+    delete "/spaces/:space_id/datasets/:dataset_id/files/:file_id", DatasetController, :delete_file
 
     # Webhooks
     get "/webhooks", WebhookController, :index
