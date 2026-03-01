@@ -77,5 +77,25 @@ if Mix.env() == :dev do
     IO.puts("Created demo space: cyanea-labs/example-dataset")
   end
 
-  IO.puts("Seeding complete!")
+  # Seed Learn curriculum (tracks, paths, units)
+  IO.puts("\nSeeding Learn curriculum...")
+
+  # Ensure we have the user's ID (on_conflict: :nothing may return nil id)
+  seed_user = demo_user.id && demo_user || Repo.get_by!(User, email: "demo@cyanea.dev")
+
+  case Cyanea.Learn.Seed.run(owner_type: "user", owner_id: seed_user.id) do
+    {:ok, summary} ->
+      IO.puts("  Tracks: #{summary.tracks} created")
+      IO.puts("  Paths: #{summary.paths} created")
+      IO.puts("  Units: #{summary.units} imported")
+
+      if summary.skipped > 0 do
+        IO.puts("  Skipped: #{summary.skipped} (already exist or missing files)")
+      end
+
+    {:error, reason} ->
+      IO.puts("  Learn seed failed: #{inspect(reason)}")
+  end
+
+  IO.puts("\nSeeding complete!")
 end
