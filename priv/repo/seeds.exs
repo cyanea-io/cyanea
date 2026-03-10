@@ -34,6 +34,37 @@ if Mix.env() == :dev do
 
   IO.puts("Created demo user: demo@cyanea.dev / password123")
 
+  # Create site admin user (cyanea.bio owner)
+  admin_result =
+    %User{}
+    |> User.changeset(%{
+      email: "raffael.schneider@protonmail.com",
+      username: "raskell",
+      name: "Raffael Schneider",
+      password: "Xk9$mW2vL#pQ7nR4!bYj"
+    })
+    |> Ecto.Changeset.put_change(:role, "admin")
+    |> Ecto.Changeset.put_change(:confirmed_at, DateTime.truncate(DateTime.utc_now(), :second))
+    |> Repo.insert(on_conflict: :nothing)
+
+  case admin_result do
+    {:ok, %{id: nil}} ->
+      # on_conflict: :nothing returned empty — user already exists, promote to admin
+      if admin = Repo.get_by(User, email: "raffael.schneider@protonmail.com") do
+        admin
+        |> Ecto.Changeset.change(role: "admin")
+        |> Repo.update!()
+
+        IO.puts("Promoted existing user raskell to admin")
+      end
+
+    {:ok, _admin} ->
+      IO.puts("Created site admin: raskell (role: admin)")
+
+    {:error, changeset} ->
+      IO.puts("Admin seed error: #{inspect(changeset.errors)}")
+  end
+
   # Create a demo organization
   {:ok, demo_org} =
     %Organization{}
