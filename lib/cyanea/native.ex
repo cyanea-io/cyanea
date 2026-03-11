@@ -526,6 +526,49 @@ defmodule Cyanea.Native do
   @doc "Batch z-score normalization on GPU (per-row)"
   def gpu_batch_z_score(_data, _n_rows, _n_cols),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  # ===========================================================================
+  # cyanea-io — New format stats (Phase 10)
+  # ===========================================================================
+
+  @doc "Get Parquet file statistics (row count, column count, column names, compression)"
+  def parquet_stats(_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Get GenBank file statistics (feature count, organism, accession, sequence length)"
+  def genbank_stats(_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Get EMBL file statistics (feature count, organism, accession, sequence length)"
+  def embl_stats(_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Get Newick file statistics (taxa count, is rooted, has branch lengths)"
+  def newick_file_stats(_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Get NEXUS file statistics (taxa count, tree count, has data block)"
+  def nexus_file_stats(_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Get SDF file statistics (molecule count, average atoms, average bonds)"
+  def sdf_stats(_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Get PDB file statistics (chain count, residue count, resolution, method)"
+  def pdb_file_stats(_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Get mmCIF file statistics (chain count, residue count, resolution, method)"
+  def mmcif_file_stats(_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Get Stockholm alignment statistics (sequence count, alignment length)"
+  def stockholm_stats(_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Get Clustal alignment statistics (sequence count, alignment length)"
+  def clustal_stats(_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Get PHYLIP alignment statistics (sequence count, alignment length)"
+  def phylip_stats(_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Get bigWig file statistics (chromosome count, total bases)"
+  def bigwig_stats(_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc "Get bedGraph file statistics (record count, chromosome count)"
+  def bedgraph_stats(_path), do: :erlang.nif_error(:nif_not_loaded)
 end
 
 # ===========================================================================
@@ -761,4 +804,56 @@ end
 defmodule Cyanea.Native.GpuInfo do
   @moduledoc "GPU backend info (cyanea-gpu)"
   defstruct [:available, :backend]
+end
+
+# --- New format stats (Phase 10) ---
+
+defmodule Cyanea.Native.ParquetStats do
+  @moduledoc "Parquet file statistics (cyanea-io)"
+  defstruct [:row_count, :column_count, :columns, :compression]
+end
+
+defmodule Cyanea.Native.GenbankStats do
+  @moduledoc "GenBank file statistics (cyanea-io)"
+  defstruct [:feature_count, :organism, :accession, :sequence_length]
+end
+
+defmodule Cyanea.Native.EmblStats do
+  @moduledoc "EMBL file statistics (cyanea-io)"
+  defstruct [:feature_count, :organism, :accession, :sequence_length]
+end
+
+defmodule Cyanea.Native.NewickFileStats do
+  @moduledoc "Newick file statistics (cyanea-phylo)"
+  defstruct [:taxa_count, :is_rooted, :has_branch_lengths]
+end
+
+defmodule Cyanea.Native.NexusFileStats do
+  @moduledoc "NEXUS file statistics (cyanea-phylo)"
+  defstruct [:taxa_count, :tree_count, :has_data_block]
+end
+
+defmodule Cyanea.Native.SdfStats do
+  @moduledoc "SDF file statistics (cyanea-chem)"
+  defstruct [:molecule_count, :avg_atoms, :avg_bonds]
+end
+
+defmodule Cyanea.Native.PdbFileStats do
+  @moduledoc "PDB file statistics (cyanea-struct)"
+  defstruct [:chain_count, :residue_count, :resolution, :method]
+end
+
+defmodule Cyanea.Native.AlignmentStats do
+  @moduledoc "Alignment file statistics (Stockholm, Clustal, PHYLIP)"
+  defstruct [:sequence_count, :alignment_length]
+end
+
+defmodule Cyanea.Native.BigWigStats do
+  @moduledoc "bigWig file statistics (cyanea-io)"
+  defstruct [:chrom_count, :total_bases]
+end
+
+defmodule Cyanea.Native.BedGraphStats do
+  @moduledoc "bedGraph file statistics (cyanea-io)"
+  defstruct [:record_count, :chrom_count]
 end

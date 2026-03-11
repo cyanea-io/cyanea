@@ -163,6 +163,60 @@ defmodule Cyanea.Compute do
   def parse_bed_intervals(path) when is_binary(path),
     do: nif_call(fn -> Native.parse_bed_intervals(path) end)
 
+  # --- New format parsers (Phase 10) -------------------------------------------
+
+  @doc "Get Parquet file statistics (row count, column count, column names, compression)."
+  def parquet_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.parquet_stats(path) end)
+
+  @doc "Get GenBank file statistics (feature count, organism, accession, sequence length)."
+  def genbank_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.genbank_stats(path) end)
+
+  @doc "Get EMBL file statistics (feature count, organism, accession, sequence length)."
+  def embl_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.embl_stats(path) end)
+
+  @doc "Get Newick file statistics (taxa count, is rooted, has branch lengths)."
+  def newick_file_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.newick_file_stats(path) end)
+
+  @doc "Get NEXUS file statistics (taxa count, tree count, has data block)."
+  def nexus_file_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.nexus_file_stats(path) end)
+
+  @doc "Get SDF file statistics (molecule count, average atoms, average bonds)."
+  def sdf_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.sdf_stats(path) end)
+
+  @doc "Get PDB file statistics (chain count, residue count, resolution, method)."
+  def pdb_file_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.pdb_file_stats(path) end)
+
+  @doc "Get mmCIF file statistics (chain count, residue count, resolution, method)."
+  def mmcif_file_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.mmcif_file_stats(path) end)
+
+  @doc "Get Stockholm alignment statistics (sequence count, alignment length)."
+  def stockholm_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.stockholm_stats(path) end)
+
+  @doc "Get Clustal alignment statistics (sequence count, alignment length)."
+  def clustal_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.clustal_stats(path) end)
+
+  @doc "Get PHYLIP alignment statistics (sequence count, alignment length)."
+  def phylip_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.phylip_stats(path) end)
+
+  @doc "Get bigWig file statistics (chromosome count, total bases)."
+  def bigwig_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.bigwig_stats(path) end)
+
+  @doc "Get bedGraph file statistics (record count, chromosome count)."
+  def bedgraph_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.bedgraph_stats(path) end)
+
   # ===========================================================================
   # Alignment
   # ===========================================================================

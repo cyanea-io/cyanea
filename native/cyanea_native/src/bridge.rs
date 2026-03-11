@@ -657,6 +657,91 @@ pub struct GpuInfoNif {
 }
 
 // ===========================================================================
+// New format stats (Phase 10)
+// ===========================================================================
+
+#[derive(Debug, NifStruct)]
+#[module = "Cyanea.Native.ParquetStats"]
+pub struct ParquetStatsNif {
+    pub row_count: u64,
+    pub column_count: usize,
+    pub columns: Vec<String>,
+    pub compression: String,
+}
+
+#[derive(Debug, NifStruct)]
+#[module = "Cyanea.Native.GenbankStats"]
+pub struct GenbankStatsNif {
+    pub feature_count: usize,
+    pub organism: String,
+    pub accession: String,
+    pub sequence_length: u64,
+}
+
+#[derive(Debug, NifStruct)]
+#[module = "Cyanea.Native.EmblStats"]
+pub struct EmblStatsNif {
+    pub feature_count: usize,
+    pub organism: String,
+    pub accession: String,
+    pub sequence_length: u64,
+}
+
+#[derive(Debug, NifStruct)]
+#[module = "Cyanea.Native.NewickFileStats"]
+pub struct NewickFileStatsNif {
+    pub taxa_count: usize,
+    pub is_rooted: bool,
+    pub has_branch_lengths: bool,
+}
+
+#[derive(Debug, NifStruct)]
+#[module = "Cyanea.Native.NexusFileStats"]
+pub struct NexusFileStatsNif {
+    pub taxa_count: usize,
+    pub tree_count: usize,
+    pub has_data_block: bool,
+}
+
+#[derive(Debug, NifStruct)]
+#[module = "Cyanea.Native.SdfStats"]
+pub struct SdfStatsNif {
+    pub molecule_count: usize,
+    pub avg_atoms: f64,
+    pub avg_bonds: f64,
+}
+
+#[derive(Debug, NifStruct)]
+#[module = "Cyanea.Native.PdbFileStats"]
+pub struct PdbFileStatsNif {
+    pub chain_count: usize,
+    pub residue_count: usize,
+    pub resolution: Option<f64>,
+    pub method: Option<String>,
+}
+
+#[derive(Debug, NifStruct)]
+#[module = "Cyanea.Native.AlignmentStats"]
+pub struct AlignmentStatsNif {
+    pub sequence_count: usize,
+    pub alignment_length: usize,
+}
+
+#[derive(Debug, NifStruct)]
+#[module = "Cyanea.Native.BigWigStats"]
+pub struct BigWigStatsNif {
+    pub chrom_count: usize,
+    pub total_bases: u64,
+}
+
+#[derive(Debug, NifStruct)]
+#[module = "Cyanea.Native.BedGraphStats"]
+pub struct BedGraphStatsNif {
+    pub record_count: usize,
+    pub chrom_count: usize,
+}
+
+// ===========================================================================
 // Helper: structure_to_pdb_info
 // ===========================================================================
 

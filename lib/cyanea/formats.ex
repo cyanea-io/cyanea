@@ -1,5 +1,5 @@
 defmodule Cyanea.Formats do
-  @moduledoc "Bioinformatics file format parsing: CSV, VCF, BED, GFF3, SAM, BAM."
+  @moduledoc "Bioinformatics file format parsing: CSV, VCF, BED, GFF3, SAM, BAM, Parquet, GenBank, EMBL, Newick, NEXUS, SDF, PDB, mmCIF, Stockholm, Clustal, PHYLIP, bigWig, bedGraph."
 
   import Cyanea.NifHelper
   alias Cyanea.Native
@@ -97,4 +97,97 @@ defmodule Cyanea.Formats do
   @spec parse_bam(binary()) :: {:ok, list()} | {:error, term()}
   def parse_bam(path) when is_binary(path),
     do: nif_call(fn -> Native.parse_bam(path) end)
+
+  # ===========================================================================
+  # Parquet
+  # ===========================================================================
+
+  @doc "Get Parquet file statistics (row count, column count, column names, compression)."
+  @spec parquet_stats(binary()) :: {:ok, struct()} | {:error, term()}
+  def parquet_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.parquet_stats(path) end)
+
+  # ===========================================================================
+  # GenBank & EMBL
+  # ===========================================================================
+
+  @doc "Get GenBank file statistics (feature count, organism, accession, sequence length)."
+  @spec genbank_stats(binary()) :: {:ok, struct()} | {:error, term()}
+  def genbank_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.genbank_stats(path) end)
+
+  @doc "Get EMBL file statistics (feature count, organism, accession, sequence length)."
+  @spec embl_stats(binary()) :: {:ok, struct()} | {:error, term()}
+  def embl_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.embl_stats(path) end)
+
+  # ===========================================================================
+  # Phylogenetics (Newick, NEXUS)
+  # ===========================================================================
+
+  @doc "Get Newick file statistics (taxa count, is rooted, has branch lengths)."
+  @spec newick_file_stats(binary()) :: {:ok, struct()} | {:error, term()}
+  def newick_file_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.newick_file_stats(path) end)
+
+  @doc "Get NEXUS file statistics (taxa count, tree count, has data block)."
+  @spec nexus_file_stats(binary()) :: {:ok, struct()} | {:error, term()}
+  def nexus_file_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.nexus_file_stats(path) end)
+
+  # ===========================================================================
+  # Chemistry (SDF)
+  # ===========================================================================
+
+  @doc "Get SDF file statistics (molecule count, average atoms, average bonds)."
+  @spec sdf_stats(binary()) :: {:ok, struct()} | {:error, term()}
+  def sdf_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.sdf_stats(path) end)
+
+  # ===========================================================================
+  # Structures (PDB, mmCIF)
+  # ===========================================================================
+
+  @doc "Get PDB file statistics (chain count, residue count, resolution, method)."
+  @spec pdb_file_stats(binary()) :: {:ok, struct()} | {:error, term()}
+  def pdb_file_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.pdb_file_stats(path) end)
+
+  @doc "Get mmCIF file statistics (chain count, residue count, resolution, method)."
+  @spec mmcif_file_stats(binary()) :: {:ok, struct()} | {:error, term()}
+  def mmcif_file_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.mmcif_file_stats(path) end)
+
+  # ===========================================================================
+  # Sequence Alignments (Stockholm, Clustal, PHYLIP)
+  # ===========================================================================
+
+  @doc "Get Stockholm alignment statistics (sequence count, alignment length)."
+  @spec stockholm_stats(binary()) :: {:ok, struct()} | {:error, term()}
+  def stockholm_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.stockholm_stats(path) end)
+
+  @doc "Get Clustal alignment statistics (sequence count, alignment length)."
+  @spec clustal_stats(binary()) :: {:ok, struct()} | {:error, term()}
+  def clustal_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.clustal_stats(path) end)
+
+  @doc "Get PHYLIP alignment statistics (sequence count, alignment length)."
+  @spec phylip_stats(binary()) :: {:ok, struct()} | {:error, term()}
+  def phylip_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.phylip_stats(path) end)
+
+  # ===========================================================================
+  # Genomic Signal Formats (bigWig, bedGraph)
+  # ===========================================================================
+
+  @doc "Get bigWig file statistics (chromosome count, total bases)."
+  @spec bigwig_stats(binary()) :: {:ok, struct()} | {:error, term()}
+  def bigwig_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.bigwig_stats(path) end)
+
+  @doc "Get bedGraph file statistics (record count, chromosome count)."
+  @spec bedgraph_stats(binary()) :: {:ok, struct()} | {:error, term()}
+  def bedgraph_stats(path) when is_binary(path),
+    do: nif_call(fn -> Native.bedgraph_stats(path) end)
 end
